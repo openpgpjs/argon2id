@@ -3,28 +3,20 @@
   "version": "2.1.4",
   "description": "Blake2b (64-bit version) in pure Javascript",
   "main": "index.js",
-  "dependencies": {
-    "blake2b-wasm": "^2.4.0",
-    "nanoassert": "^2.0.0"
-  },
-  "devDependencies": {
-    "browserify": "^14.4.0",
-    "coverify": "^1.4.1",
-    "tape": "^4.6.3"
-  },
   "scripts": {
-    "test": "tape test.js",
-    "cov": "browserify -t coverify test.js | node | coverify"
+    "test": "tape test/test.js",
+    "lint": "eslint index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/emilbayes/blake2b.git"
+    "url": "git+https://github.com/larabr/blake2b.git"
   },
   "keywords": [],
-  "author": "Emil Bay <github@tixz.dk>",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/emilbayes/blake2b/issues"
-  },
-  "homepage": "https://github.com/emilbayes/blake2b#readme"
+  "license": "MIT",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.38.0",
+    "@typescript-eslint/parser": "^5.38.0",
+    "eslint": "^8.19.0",
+    "tape": "^4.6.3"
+  }
 }
