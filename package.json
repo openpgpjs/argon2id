@@ -1,22 +1,24 @@
 {
-  "name": "blake2b",
-  "version": "2.1.4",
-  "description": "Blake2b (64-bit version) in pure Javascript",
+  "name": "argon2id",
+  "version": "0.0.0",
+  "description": "Argon2id implementation in pure Javascript",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "tape test/test.js",
+    "test": "tape-es test/blake2b.spec.js | tap-spec && tape-es test/argon2id.spec.js | tap-spec",
     "lint": "eslint index.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/larabr/blake2b.git"
+    "url": "git+https://github.com/openpgpjs/argon2id.git"
   },
-  "keywords": [],
+  "keywords": ["argon2", "argon2id", "rfc9106"],
   "license": "MIT",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.38.0",
     "@typescript-eslint/parser": "^5.38.0",
     "eslint": "^8.19.0",
-    "tape": "^4.6.3"
+    "tap-spec": "^5.0.0",
+    "tape-es": "^1.2.17"
   }
 }

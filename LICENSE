@@ -1,5 +1,5 @@
 Copyright (c) 2022, Proton AG
-Copyright (c) 2017, Emil Bay github@tixz.dk
+Copyright (c) 2017, Emil Bay github@tixz.dk (for original blake2b code from https://github.com/emilbayes/blake2b)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

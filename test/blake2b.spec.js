@@ -1,6 +1,6 @@
-const test = require('tape')
-const blake2b = require('../')
-const vectors = require('./test-vectors.json')
+import test from 'tape';
+import blake2b from '../blake2b.js';
+import vectors from './blake2b.vectors.json' assert { type: "json" };
 
 runTests()
 

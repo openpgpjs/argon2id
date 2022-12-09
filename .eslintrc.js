@@ -5,6 +5,10 @@ module.exports = {
     "node": true
   },
 
+  "parserOptions": {
+    "sourceType": "module"
+  },
+
   "rules": {
     "no-undef": "error"
   },
