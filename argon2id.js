@@ -141,17 +141,20 @@ function ADD64 (a, i, b, j) {
 }
 
 // Clamp BigInt to 64-bits and store it in little-endian format inside a Uint32Array(2)
-function STORE64(u32, bigInt) {
-  const n = BigInt.asUintN(64, bigInt);
+function STORE64(u32, n) {
+  // const n = BigInt.asUintN(64, bigInt);
   u32[0] = Number(BigInt.asUintN(32, n));
   u32[1] = Number(n >> BigInt(32));
 }
 
+const prod = new Uint32Array(2);
+const n2 = BigInt(2);
+const u64 = new BigUint64Array(1);
 function GB(v, a, b, c, d) {
-  const prod = new Uint32Array(2);
-  const n2 = BigInt(2);
+
   // a = (a + b + 2 * trunc(a) * trunc(b)) mod 2^(64)
-  STORE64(prod, n2 * BigInt(v[a]) * BigInt(v[b])); 
+  u64[0] = n2 * BigInt(v[a]) * BigInt(v[b]);
+  STORE64(prod, u64[0]); 
   ADD64(v, a, v, b);
   ADD64(v, a, prod, 0);
 
@@ -161,7 +164,8 @@ function GB(v, a, b, c, d) {
   v[d] = xor1
   v[d+1] = xor0
   // c = (c + d + 2 * trunc(c) * trunc(d)) mod 2^(64)
-  STORE64(prod, n2 * BigInt(v[c]) * BigInt(v[d])); 
+  u64[0] = n2 * BigInt(v[c]) * BigInt(v[d]); 
+  STORE64(prod, u64[0]); 
   ADD64(v, c, v, d);
   ADD64(v, c, prod, 0);
   // b = (b XOR c) >>> 24
@@ -171,7 +175,8 @@ function GB(v, a, b, c, d) {
   v[b+1] = (xor1 >>> 24) ^ (xor0 << 8)
 
   // a = (a + b + 2 * trunc(a) * trunc(b)) mod 2^(64)
-  STORE64(prod, n2 * BigInt(v[a]) * BigInt(v[b])); 
+  u64[0] = n2 * BigInt(v[a]) * BigInt(v[b])
+  STORE64(prod, u64[0]); 
   ADD64(v, a, v, b);
   ADD64(v, a, prod, 0);
 
@@ -181,7 +186,8 @@ function GB(v, a, b, c, d) {
   v[d] = (xor0 >>> 16) ^ (xor1 << 16)
   v[d+1] = (xor1 >>> 16) ^ (xor0 << 16)
   // c = (c + d + 2 * trunc(c) * trunc(d)) mod 2^(64)
-  STORE64(prod, n2 * BigInt(v[c]) * BigInt(v[d])); 
+  u64[0] = n2 * BigInt(v[c]) * BigInt(v[d])
+  STORE64(prod, u64[0]); 
   ADD64(v, c, v, d);
   ADD64(v, c, prod, 0);
   // b = (b XOR c) >>> 63
