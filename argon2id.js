@@ -99,6 +99,7 @@ function GET32 (arr, i) {
 }
 const v = new Uint32Array(32);
 
+
 // S = S_7 || .. || S_0, each S_i is 16 bytes
 function P(S, ids) {
   // v stores 16 64-bit values
@@ -128,35 +129,12 @@ function P(S, ids) {
   return res;
 }
 
-// Uint64 values are represented using two Uint32s, stored as little endian
-// NB: Uint32Arrays endianness depends on the underlying system, so for interoperability, conversions between Uint8Array and Uint32Arrays
-// need to be manually handled
-
-// 64-bit unsigned addition (little endian, in place)
-// Sets a[i,i+1] += b[j,j+1]
-// `a` and `b` must be Uint32Array(2)
-function ADD64 (a, i, b, j) {
-  a[i] += b[j];
-  a[i+1] += b[j+1] + (a[i] < b[j]); // add carry
-}
-
-// Clamp BigInt to 64-bits and store it in little-endian format inside a Uint32Array(2)
-function STORE64(u32, n) {
-  // const n = BigInt.asUintN(64, bigInt);
-  u32[0] = Number(BigInt.asUintN(32, n));
-  u32[1] = Number(n >> BigInt(32));
-}
-
-const prod = new Uint32Array(2);
+const v64 = new BigUint64Array(v.buffer);
 const n2 = BigInt(2);
-const u64 = new BigUint64Array(1);
 function GB(v, a, b, c, d) {
 
   // a = (a + b + 2 * trunc(a) * trunc(b)) mod 2^(64)
-  u64[0] = n2 * BigInt(v[a]) * BigInt(v[b]);
-  STORE64(prod, u64[0]); 
-  ADD64(v, a, v, b);
-  ADD64(v, a, prod, 0);
+  v64[a/2] += n2 * BigInt.asUintN(32, v64[a/2]) * BigInt.asUintN(32, v64[b/2]) + v64[b/2];
 
   // d = (d XOR a) >>> 32, where >>> is a rotation
   let xor0 = v[d] ^ v[a]
@@ -164,10 +142,8 @@ function GB(v, a, b, c, d) {
   v[d] = xor1
   v[d+1] = xor0
   // c = (c + d + 2 * trunc(c) * trunc(d)) mod 2^(64)
-  u64[0] = n2 * BigInt(v[c]) * BigInt(v[d]); 
-  STORE64(prod, u64[0]); 
-  ADD64(v, c, v, d);
-  ADD64(v, c, prod, 0);
+  v64[c/2] += v64[d/2] + n2 * BigInt.asUintN(32, v64[c/2]) * BigInt.asUintN(32, v64[d/2]);
+
   // b = (b XOR c) >>> 24
   xor0 = v[b] ^ v[c]
   xor1 = v[b+1] ^ v[c+1]
@@ -175,21 +151,17 @@ function GB(v, a, b, c, d) {
   v[b+1] = (xor1 >>> 24) ^ (xor0 << 8)
 
   // a = (a + b + 2 * trunc(a) * trunc(b)) mod 2^(64)
-  u64[0] = n2 * BigInt(v[a]) * BigInt(v[b])
-  STORE64(prod, u64[0]); 
-  ADD64(v, a, v, b);
-  ADD64(v, a, prod, 0);
+  v64[a/2] += n2 * BigInt.asUintN(32, v64[a/2]) * BigInt.asUintN(32, v64[b/2]) + v64[b/2];
 
   // d = (d XOR a) >>> 16
   xor0 = v[d] ^ v[a]
   xor1 = v[d+1] ^ v[a+1]
   v[d] = (xor0 >>> 16) ^ (xor1 << 16)
   v[d+1] = (xor1 >>> 16) ^ (xor0 << 16)
+
   // c = (c + d + 2 * trunc(c) * trunc(d)) mod 2^(64)
-  u64[0] = n2 * BigInt(v[c]) * BigInt(v[d])
-  STORE64(prod, u64[0]); 
-  ADD64(v, c, v, d);
-  ADD64(v, c, prod, 0);
+  v64[c/2] += v64[d/2] + n2 * BigInt.asUintN(32, v64[c/2]) * BigInt.asUintN(32, v64[d/2]);
+
   // b = (b XOR c) >>> 63
   xor0 = v[b] ^ v[c]
   xor1 = v[b+1] ^ v[c+1]
