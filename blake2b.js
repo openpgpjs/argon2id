@@ -222,10 +222,11 @@ class Blake2b {
   }
 
   /**
-   * Return a BLAKE2b hash
+   * Return a BLAKE2b hash, either filling the given Uint8Array or allocating a new one
+   * @param {Uint8Array} [prealloc] - optional preallocated buffer
    * @returns {ArrayBuffer} message digest
    */
-  digest() {
+  digest(prealloc) {
     INC64(this.S.t0, this.S.c) // mark last block offset
 
     // final block, padded
@@ -233,7 +234,7 @@ class Blake2b {
     this.S.c = BLOCKBYTES;
     compress(this.S, true)
 
-    const out = new Uint8Array(this.S.outlen);
+    const out = prealloc || new Uint8Array(this.S.outlen);
     for (let i = 0; i < this.S.outlen; i++) {
       // must be loaded individually since default Uint32 endianness is platform dependant
       out[i] = this.S.h[i >> 2] >> (8 * (i & 3))

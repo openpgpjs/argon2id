@@ -5,10 +5,21 @@
 //   * (?) have blake take a buffer on digest, to avoid additional allocation (+ additional copy operation)
 // - reference test vectors for p = 1 : https://github.com/jedisct1/libsodium/blob/master/test/default/pwhash_argon2id.c
 import blake2b from "./blake2b.js"
+const KEYBYTES_MAX = 32; // key (optional)
+const ADBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1; // associated data (optional)
+const VERSION = 0x13;
+const TAGBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
+const TAGBYTES_MIN = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
+const NONCEBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
+const NONCEBYTES_MIN = 8;
+const MSGBYTES_MAX = 0xFFFFFFFF;// Math.pow(2, 32) - 1;
+const TYPE = 2;  // Argon2id 
 
-function toBig64(u32) {
-  return BigInt(u32[0]) | (BigInt(u32[1]) << BigInt(32))
-}
+const SYNC_POINTS = 4 // Number of synchronization points between lanes per pass TODO do we need this?
+const ARGON2_BLOCK_SIZE = 1024;
+const ARGON2_PREHASH_DIGEST_LENGTH = 64;
+const ARGON2_PREHASH_SEED_LENGTH = 72;
+
 
 // store n as a little-endian 32-bit Uint8Array inside buf (at buf[i:i+3])
 function LE32s(buf, n, i) {
@@ -38,14 +49,15 @@ function LE64s(buf, n, i) {
   return buf;
 }
 
+const Q = new Uint8Array(1024);
+
 // The compression function G
 // operates on two 1024-byte blocks X and Y
 // `blake2b_long` in reference code -- different from G from blake2b
-export function G(X, Y) {
-  const R = new Uint8Array(ARGON2_BLOCK_SIZE);
+export function G(X, Y, preallocR) {
+  const R = preallocR || new Uint8Array(ARGON2_BLOCK_SIZE);
   XOR(R, X, Y);
 
-  const Q = new Uint8Array(1024);
   // we need to store S_i = (v_{2*i+1} || v_{2*i}), for v[i] of 64 bits
   // S[0] = R[8:15] || R[0:7]
   for(let i = 0; i < 8; i++) {
@@ -63,17 +75,18 @@ export function G(X, Y) {
 
     // Z XOR R (one column at a time)
     for(let j = 0; j < 8; j++) {
-      const Zij = Z.subarray(j*16, j*16+16);
-      const Rij = R.subarray(j*128 + i*16, j*128 + i*16 + 16);
+      // const Zij = Z.subarray(j*16, j*16+16);
+      // const Rij = R.subarray(j*128 + i*16, j*128 + i*16 + 16);
 
       // TODO alternative is to store Z fully in a separate buffer and then XOR it as a whole in the end
       // or have XOR get indices instead of forcing subarrays (see performance)
-      XOR(Rij, Rij, Zij);
+      XORs(R, Z, j*128 + i*16, j*16, 16);
     }
   }
 
   return R;
 }
+const res = new Uint8Array(128);
 
 // Reconstruct Uint32 from Uint8Array entries a[i : i+3] (as little-endian)
 // NB result must be stored in Uint32Array to avoid overflow
@@ -84,11 +97,11 @@ function GET32 (arr, i) {
     (arr[i + 2] << 16) |
     (arr[i + 3] << 24)
 }
+const v = new Uint32Array(32);
 
 // S = S_7 || .. || S_0, each S_i is 16 bytes
 function P(S, ids) {
   // v stores 16 64-bit values
-  const v = new Uint32Array(32);
 
   for (let i = 0; i < ids.length; i++) {
     // S_i = (v_{2*i+1} || v_{2*i}) of 128 bits
@@ -108,7 +121,6 @@ function P(S, ids) {
   GB(v, 4, 14, 16, 26);
   GB(v, 6,  8, 18, 28);
 
-  const res = new Uint8Array(128);
   // TODO leave uint32 in output, and also get S as uint32?
   for(let i = 0; i < res.length; i++) {
     res[i] = v[i >> 2] >> (8 * (i & 3))
@@ -178,12 +190,7 @@ function GB(v, a, b, c, d) {
   v[b] = (xor1 >>> 31) ^ (xor0 << 1)
   v[b+1] = (xor0 >>> 31) ^ (xor1 << 1)
 }
-
-function getUint64Array(v) {
-  let bigs = new Array();
-  v.forEach((n, i) => (i % 2 !== 0 ? null : bigs.push(toBig64(v.subarray(i, i+2)))));
-  return bigs
-}
+let V = new Uint8Array(64); // no need to keep around all V_i
 
 /**
  * Variable-Length Hash Function H'
@@ -210,10 +217,9 @@ function H_(outlen, X) {
   // V_r = H^(64)(V_{r-1})
   // V_{r+1} = H^(T-32*r)(V_{r})
   // H'^T(X) = W_1 || W_2 || ... || W_r || V_{r+1}
-  let V; // no need to keep around all V_i
   for (let i = 0; i < r; i++) {
     // TODO lara: have blake2b.digest support a buffer in input? to skip allocating new buffer at each digest()
-    V = new Uint8Array(blake2b(64).update(i === 0 ? V1_in : V).digest());
+    blake2b(64).update(i === 0 ? V1_in : V).digest(V);
     // console.log(V)
     // store W_i in result buffer already
     res.set(V.subarray(0, 32), i*32)
@@ -232,11 +238,20 @@ function XOR(buf, xs, ys) {
     buf[i] = xs[i] ^ ys[i]
 }
 
+// XOR xs[iX:iX+len] ^= ys[iY:iY+len]
+function XORs(xs, ys, iX, iY, len) {
+  for (let i = 0; i < len; i++)
+    xs[iX + i] = xs[iX + i] ^ ys[iY + i]
+}
+
+const ZERO1024 = new Uint8Array(1024);
+const tmp = new Uint8Array(ARGON2_BLOCK_SIZE) // Z.length + 8 + 968;
+
 // Generator for data-independent J1, J2. Each `next()` invocation returns a new pair of values.
 function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOffset) {
   // For each segment, we do the following. First, we compute the value Z as:
   // Z= ( LE64(r) || LE64(l) || LE64(sl) || LE64(m') || LE64(t) || LE64(y) )
-  const tmp = new Uint8Array(ARGON2_BLOCK_SIZE) // Z.length + 8 + 968;
+  tmp.fill(0)
   const Z = tmp.subarray(0, 6 * 8);
   LE64s(Z, pass, 0);
   LE64s(Z, lane, 8);
@@ -244,7 +259,6 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
   LE64s(Z, m_, 24);
   LE64s(Z, totalPasses, 32);
   LE64s(Z, TYPE, 40);
-  const ZERO1024 = new Uint8Array(1024);
 
   // Then we compute q/(128*SL) 1024-byte values
   // G( ZERO(1024),
@@ -252,10 +266,12 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
   // ...,
   // G( ZERO(1024),
   //    G( ZERO(1024), Z || LE64(q/(128*SL)) || ZERO(968) )),
+  const r1 = new Uint8Array(ARGON2_BLOCK_SIZE);
+  const r2= new Uint8Array(ARGON2_BLOCK_SIZE);
   for(let i = 1; i <= segmentLength; i++) {
     // tmp.set(Z); // no need to re-copy
     LE64s(tmp, i, Z.length); // tmp.set(ZER0968) not necessary, memory already zeroed
-    const g2 = G( ZERO1024, G( ZERO1024, tmp ) );
+    const g2 = G( ZERO1024, G( ZERO1024, tmp, r1 ), r2 );
 
     // each invocation of G^2 outputs 1024 bytes that are to be partitioned into 8-bytes values, take as X1 || X2
     // NB: the first generated pair must be used for the first block of the segment, and so on.
@@ -286,7 +302,7 @@ export function getZL(J1, J2, currentLane, p, pass, slice, segmentOffset, SL, se
   const z = (startPos + zz) % (SL * segmentLength);
   return [l, z]
 }
-
+const newBlock = new Uint8Array(ARGON2_BLOCK_SIZE)
 export default function argon2id(settings) {
   const ctx = { type: TYPE, version: VERSION, outlen: 32, ...settings };
   // 1. Establish H_0
@@ -337,10 +353,12 @@ export default function argon2id(settings) {
           // for (let i = 0; i < p; i++ )
           // B[i][j] = G(B[i][j-1], B[l][z])
           // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
-          const newBlock = G(prevBlock, B[l][z]);
+          if (pass === 0) B[i][j] =new Uint8Array(ARGON2_BLOCK_SIZE)
+          G(prevBlock, B[l][z],  pass > 0 ? newBlock : B[i][j]);
+          // console.log('l' , B[l][z].length, newBlock.length)
           // 6. If the number of passes t is larger than 1, we repeat step 5. However, blocks are computed differently as the old value is XORed with the new one
-          if (pass > 0) XOR(newBlock, newBlock, B[i][j])
-          B[i][j] = newBlock;
+          if (pass > 0) XOR(B[i][j], newBlock, B[i][j])
+          // B[i][j] = newNewBlock;
         }
       }
     }
@@ -406,20 +424,6 @@ function getH0(ctx) {
 
 
 
-const KEYBYTES_MAX = 32; // key (optional)
-const ADBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1; // associated data (optional)
-const VERSION = 0x13;
-const TAGBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
-const TAGBYTES_MIN = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
-const NONCEBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1;
-const NONCEBYTES_MIN = 8;
-const MSGBYTES_MAX = 0xFFFFFFFF;// Math.pow(2, 32) - 1;
-const TYPE = 2;  // Argon2id 
-
-const SYNC_POINTS = 4 // Number of synchronization points between lanes per pass TODO do we need this?
-const ARGON2_BLOCK_SIZE = 1024;
-const ARGON2_PREHASH_DIGEST_LENGTH = 64;
-const ARGON2_PREHASH_SEED_LENGTH = 72;
 
 export function uint8ArrayToHex(bytes) {
   const res = new Array();
