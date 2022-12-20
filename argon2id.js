@@ -5,6 +5,7 @@
 //   * (?) have blake take a buffer on digest, to avoid additional allocation (+ additional copy operation)
 // - reference test vectors for p = 1 : https://github.com/jedisct1/libsodium/blob/master/test/default/pwhash_argon2id.c
 import blake2b from "./blake2b.js"
+import fs from 'fs';
 const KEYBYTES_MAX = 32; // key (optional)
 const ADBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1; // associated data (optional)
 const VERSION = 0x13;
@@ -97,39 +98,50 @@ function GET32 (arr, i) {
     (arr[i + 2] << 16) |
     (arr[i + 3] << 24)
 }
-const v = new Uint32Array(32);
+// const v = new Uint32Array(32);
+
+const wasmBuffer = fs.readFileSync('wasm.wasm');
 
 
+// Exported function live under instance.exports
+let wasmGB, allGB, wasmMemory;
+let v;
+let v32;
 // S = S_7 || .. || S_0, each S_i is 16 bytes
 function P(S, ids) {
   // v stores 16 64-bit values
 
+
   for (let i = 0; i < ids.length; i++) {
     // S_i = (v_{2*i+1} || v_{2*i}) of 128 bits
-    v[i*4]   = GET32(S, ids[i])
-    v[i*4+1] = GET32(S, ids[i] + 4)
-    v[i*4+2] = GET32(S, ids[i] + 8)
-    v[i*4+3] = GET32(S, ids[i] + 12)
+    v32[i*4]   = GET32(S, ids[i])
+    v32[i*4+1] = GET32(S, ids[i] + 4)
+    v32[i*4+2] = GET32(S, ids[i] + 8)
+    v32[i*4+3] = GET32(S, ids[i] + 12)
   }
+// console.log(v)
+// wasmGB(array, 0, 1,2,3)
 
-  GB(v, 0,  8, 16, 24);
-  GB(v, 2, 10, 18, 26);
-  GB(v, 4, 12, 20, 28);
-  GB(v, 6, 14, 22, 30);
+// wasmGB(v, 0,  4, 8, 12);
+// wasmGB(v, 1,  5, 9, 13);
+// wasmGB(v, 2, 6, 10, 14);
+// wasmGB(v, 3, 7, 11, 15);
 
-  GB(v, 0, 10, 20, 30);
-  GB(v, 2, 12, 22, 24);
-  GB(v, 4, 14, 16, 26);
-  GB(v, 6,  8, 18, 28);
+// wasmGB(v, 0, 5, 10, 15);
+// wasmGB(v, 1, 6, 11, 12);
+// wasmGB(v, 2, 7, 8, 13);
+// wasmGB(v, 3,  4, 9, 14);
+
+ allGB(v)
 
   // TODO leave uint32 in output, and also get S as uint32?
   for(let i = 0; i < res.length; i++) {
-    res[i] = v[i >> 2] >> (8 * (i & 3))
+    res[i] = v32[i >> 2] >> (8 * (i & 3))
   }
   return res;
 }
 
-const v64 = new BigUint64Array(v.buffer);
+// const v64 = new BigUint64Array(v.buffer);
 const n2 = BigInt(2);
 function GB(v, a, b, c, d) {
 
@@ -281,8 +293,15 @@ export function getZL(J1, J2, currentLane, p, pass, slice, segmentOffset, SL, se
   return [l, z]
 }
 const newBlock = new Uint8Array(ARGON2_BLOCK_SIZE)
-export default function argon2id(settings) {
+export default async function argon2id(settings) {
   const ctx = { type: TYPE, version: VERSION, outlen: 32, ...settings };
+  const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
+  const {GB, allGB:all, memory} = wasmModule.instance.exports;
+  wasmGB=GB; allGB=all;wasmMemory=memory;
+  // Create an array that can be passed to the WebAssembly instance.
+  v = new BigUint64Array(wasmMemory.buffer, 0, 16)
+  v32 = new Uint32Array(v.buffer)
+    
   // 1. Establish H_0
   const H0 = getH0(ctx);
 
