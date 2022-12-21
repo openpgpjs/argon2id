@@ -112,18 +112,17 @@ function XOR(buf, xs, ys) {
   return buf;
 }
 
-let wasmR;
+let wasmZ;
 function G(X, Y, R) {
   XOR(R, X, Y);
   // const Z = R.slice();
   // console.log(new BigUint64Array(R.buffer), v)
-  wasmR.set(new BigUint64Array(R.buffer)) // Z (copied)
-  // console.log('wasmr', wasmR)
-  wasmG(wasmR);
+
+  wasmG(new BigUint64Array(R.buffer, R.byteOffset, R.length / 8).byteOffset, wasmZ.byteOffset); // TODO rename wasmR to wasmZ 
   // console.log('wasmr2', wasmR)
 
   // console.log(R, new Uint8Array(wasmR.buffer, 0, 1024))
-  XOR(R, R, new Uint8Array(wasmR.buffer, 0, 1024));
+  // XOR(R, R, new Uint8Array(wasmR.buffer, 0, ARGON2_BLOCK_SIZE));
   return R;
 }
 
@@ -135,7 +134,7 @@ function XORs(xs, ys, iX, iY, len) {
 
 const ZERO1024 = new Uint8Array(1024);
 const tmp = new Uint8Array(ARGON2_BLOCK_SIZE) // Z.length + 8 + 968;
-const r1 = new Uint8Array(ARGON2_BLOCK_SIZE);
+let r1;
 
 // Generator for data-independent J1, J2. Each `next()` invocation returns a new pair of values.
 function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOffset) {
@@ -190,13 +189,17 @@ export function getZL(J1, J2, currentLane, p, pass, slice, segmentOffset, SL, se
   const z = (startPos + zz) % (SL * segmentLength);
   return [l, z]
 }
-const newBlock = new Uint8Array(ARGON2_BLOCK_SIZE)
 export default async function argon2id(settings) {
   const ctx = { type: TYPE, version: VERSION, outlen: 32, ...settings };
   const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
   const {G:wasmG_, memory} = wasmModule.instance.exports;
   wasmG=wasmG_;
-  wasmR = new BigUint64Array(memory.buffer, 0, 128)
+  let offset = 0
+  wasmZ = new BigUint64Array(memory.buffer, offset, 128); offset+= wasmZ.length*BigUint64Array.BYTES_PER_ELEMENT;
+  const newBlock = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=newBlock.length;
+  r1 = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=r1.length;
+  const blockMemory = new Uint8Array(memory.buffer, offset, ctx.m_cost * ARGON2_BLOCK_SIZE)
+  // blockMemory.fill(4)
   // wasmGB=GB; allGB=all;wasmMemory=memory;
   // Create an array that can be passed to the WebAssembly instance.
   // v = new BigUint64Array(wasmMemory.buffer, 0, 16)
@@ -250,7 +253,7 @@ export default async function argon2id(settings) {
           // for (let i = 0; i < p; i++ )
           // B[i][j] = G(B[i][j-1], B[l][z])
           // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
-          if (pass === 0) B[i][j] =new Uint8Array(ARGON2_BLOCK_SIZE)
+          if (pass === 0) B[i][j] = blockMemory.subarray(i*q*1024 + j*1024, (i*q*1024 + j*1024) + ARGON2_BLOCK_SIZE); //new Uint8Array(ARGON2_BLOCK_SIZE)
           G(prevBlock, B[l][z],  pass > 0 ? newBlock : B[i][j]);
           // console.log('l' , B[l][z].length, newBlock.length)
           // 6. If the number of passes t is larger than 1, we repeat step 5. However, blocks are computed differently as the old value is XORed with the new one

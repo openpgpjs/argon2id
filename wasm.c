@@ -31,7 +31,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t umul64(uint64_t a, uint64_t b)
 uint64_t rotr64(uint64_t x, uint64_t n) { return (x >> n) ^ (x << (64 - n)); }
 
 #define LSB(x) ((x) & 0xffffffff)
-// void xor(uint8_t* out, uint8_t* x, uint8_t* y){FOR(i,0,128)out[i] = x[i] ^ y[i];}
+void xor(uint64_t* out, uint64_t* x, uint64_t* y){for(uint8_t i = 0; i < 128; i++) out[i] = x[i] ^ y[i];}
 
 
 void GB(uint64_t* v, int a, int b, int c, int d) {
@@ -79,15 +79,18 @@ void GB(uint64_t* v, int a, int b, int c, int d) {
   GB(v, i3,  i4, i9, i14);
 }
 // given a copy of R, compute Z (in-place) 
-EMSCRIPTEN_KEEPALIVE void G(uint64_t* R) {
-  // xor(R, X, Y); // TODO do in js
+EMSCRIPTEN_KEEPALIVE void G(uint64_t* R, uint64_t* Z) {
 
-  // we need to store S_i = (v_{2*i+1} || v_{2*i}), for v[i] of 64 bits
-  // S[0] = R[8:15] || R[0:7]
-  for(uint8_t i = 0; i < 128; i+=16) {
+  // // we need to store S_i = (v_{2*i+1} || v_{2*i}), for v[i] of 64 bits
+  // // S[0] = R[8:15] || R[0:7]
+  for(int i = 0; i < 128; i+=16) {
+    Z[i+0] = R[i+0]; Z[i+1] = R[i+1]; Z[i+2] = R[i+2]; Z[i+3] = R[i+3];
+    Z[i+4] = R[i+4]; Z[i+5] = R[i+5]; Z[i+6] = R[i+6]; Z[i+7] = R[i+7];
+    Z[i+8] = R[i+8]; Z[i+9] = R[i+9]; Z[i+10] = R[i+10]; Z[i+11] = R[i+11];
+    Z[i+12] = R[i+12]; Z[i+13] = R[i+13]; Z[i+14] = R[i+14]; Z[i+15] = R[i+15];
     // const ids = [0, 1, 2, 3, 4, 5, 6, 7].map(j => i*128 + j*16); // 0, 16, .. 112 | 128, 144...
     // ( Q_0,  Q_1,  Q_2, ... ,  Q_7) <- P( R_0,  R_1,  R_2, ... ,  R_7) of 16-bytes each
-    P(R,i+0,  i+1,  i+2,  i+3,
+    P(Z,i+0,  i+1,  i+2,  i+3,
         i+4,  i+5,  i+6,  i+7,
         i+8,  i+9,  i+10, i+11,
         i+12, i+13, i+14, i+15);
@@ -98,11 +101,13 @@ EMSCRIPTEN_KEEPALIVE void G(uint64_t* R) {
     // const ids = [0, 1, 2, 3, 4, 5, 6, 7].map(j => i*16 + j*128); // 128 .. 896 | 16, 144 .. 912 | ..
     // ( Z_0,  Z_8, Z_16, ... , Z_56) <- P( Q_0,  Q_8, Q_16, ... , Q_56) of 16-bytes each
     // ( Z_1,  Z_9, Z_17, ... , Z_57) <- P( Q_1,  Q_9, Q_17, ... , Q_57) ...
-    P(R, i+0, i+1, i+16, i+17,
+    P(Z, i+0, i+1, i+16, i+17,
          i+32, i+33, i+48, i+49,
          i+64, i+65, i+80, i+81,
          i+96, i+97, i+112, i+113); // store one column of Z at a time
   }
+
+  xor(R, R, Z);
 }
 
 
