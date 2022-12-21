@@ -1,9 +1,8 @@
 // TODOs:
-// - use uint32 in more places, instead of converting inside GB
-// - optimise mem alloc:
-//   * create common buffer for functions and use .subarray, rather than having multiple smaller arrays that are later .set/copied in the big buffer
-//   * (?) have blake take a buffer on digest, to avoid additional allocation (+ additional copy operation)
-// - reference test vectors for p = 1 : https://github.com/jedisct1/libsodium/blob/master/test/default/pwhash_argon2id.c
+// - SIMD instructions
+// - compute entire segment in wasm (or at least, also the remaining XORs)
+// - test on web
+
 import blake2b from "./blake2b.js"
 import fs from 'fs';
 const KEYBYTES_MAX = 32; // key (optional)
@@ -69,19 +68,20 @@ let V = new Uint8Array(64); // no need to keep around all V_i
  * Variable-Length Hash Function H'
  * @param outlen - T
  * @param X - value to hash
+ * @param res - output buffer, of length `outlength` or larger
  * @returns 
  */
-function H_(outlen, X) {
+function H_(outlen, X, res) {
   const V1_in = new Uint8Array(4 + X.length);
   LE32s(V1_in, outlen, 0);
   V1_in.set(X, 4);
   if (outlen <= 64) {
     // H'^T(A) = H^T(LE32(T)||A)
-    return new Uint8Array(blake2b(outlen).update(V1_in).digest());
+    blake2b(outlen).update(V1_in).digest(res);
+    return res
   }
 
   const r = Math.ceil(outlen / 32) - 2;
-  const res = new Uint8Array(outlen);
 
   // Let V_i be a 64-byte block and W_i be its first 32 bytes.
   // V_1 = H^(64)(LE32(T)||A)
@@ -99,7 +99,7 @@ function H_(outlen, X) {
   }
   // V_{r+1}
   const V_r1 = new Uint8Array(blake2b(outlen - 32*r).update(V).digest());
-  res.set(V_r1, r*32);
+  res.set(V_r1, r*32); // TODO can do in place before?
 
   return res;
 }
@@ -113,16 +113,19 @@ function XOR(buf, xs, ys) {
 }
 
 let wasmZ;
+/**
+ * @param {Uint8Array} X (read-only)
+ * @param {Uint8Array} Y (read-only)
+ * @param {Uint8Array} R - output buffer
+ * @returns 
+ */
 function G(X, Y, R) {
-  XOR(R, X, Y);
-  // const Z = R.slice();
-  // console.log(new BigUint64Array(R.buffer), v)
-
-  wasmG(new BigUint64Array(R.buffer, R.byteOffset, R.length / 8).byteOffset, wasmZ.byteOffset); // TODO rename wasmR to wasmZ 
-  // console.log('wasmr2', wasmR)
-
-  // console.log(R, new Uint8Array(wasmR.buffer, 0, 1024))
-  // XOR(R, R, new Uint8Array(wasmR.buffer, 0, ARGON2_BLOCK_SIZE));
+  wasmG(
+    new BigUint64Array(X.buffer, X.byteOffset, X.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(Y.buffer, Y.byteOffset, Y.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(R.buffer, R.byteOffset, R.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    wasmZ.byteOffset
+  );
   return R;
 }
 
@@ -132,16 +135,16 @@ function XORs(xs, ys, iX, iY, len) {
     xs[iX + i] = xs[iX + i] ^ ys[iY + i]
 }
 
-const ZERO1024 = new Uint8Array(1024);
-const tmp = new Uint8Array(ARGON2_BLOCK_SIZE) // Z.length + 8 + 968;
-let r1;
+let ZERO1024;
+let prngTmp;
+let prngR;
 
 // Generator for data-independent J1, J2. Each `next()` invocation returns a new pair of values.
 function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOffset) {
   // For each segment, we do the following. First, we compute the value Z as:
   // Z= ( LE64(r) || LE64(l) || LE64(sl) || LE64(m') || LE64(t) || LE64(y) )
-  tmp.fill(0)
-  const Z = tmp.subarray(0, 6 * 8);
+  prngTmp.fill(0)
+  const Z = prngTmp.subarray(0, 6 * 8);
   LE64s(Z, pass, 0);
   LE64s(Z, lane, 8);
   LE64s(Z, slice, 16);
@@ -157,8 +160,8 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
   //    G( ZERO(1024), Z || LE64(q/(128*SL)) || ZERO(968) )),
   for(let i = 1; i <= segmentLength; i++) {
     // tmp.set(Z); // no need to re-copy
-    LE64s(tmp, i, Z.length); // tmp.set(ZER0968) not necessary, memory already zeroed
-    const g2 = G( ZERO1024, G( ZERO1024, tmp, r1 ), r1 );
+    LE64s(prngTmp, i, Z.length); // tmp.set(ZER0968) not necessary, memory already zeroed
+    const g2 = G( ZERO1024, G( ZERO1024, prngTmp, prngR ), prngR );
 
     // each invocation of G^2 outputs 1024 bytes that are to be partitioned into 8-bytes values, take as X1 || X2
     // NB: the first generated pair must be used for the first block of the segment, and so on.
@@ -197,8 +200,12 @@ export default async function argon2id(settings) {
   let offset = 0
   wasmZ = new BigUint64Array(memory.buffer, offset, 128); offset+= wasmZ.length*BigUint64Array.BYTES_PER_ELEMENT;
   const newBlock = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=newBlock.length;
-  r1 = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=r1.length;
+  // makePRNG vars
+  prngR = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=prngR.length;
+  prngTmp = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=prngTmp.length;
+  ZERO1024 = new Uint8Array(memory.buffer, offset, 1024); offset+=ZERO1024.length;
   const blockMemory = new Uint8Array(memory.buffer, offset, ctx.m_cost * ARGON2_BLOCK_SIZE)
+
   // blockMemory.fill(4)
   // wasmGB=GB; allGB=all;wasmMemory=memory;
   // Create an array that can be passed to the WebAssembly instance.
@@ -213,6 +220,10 @@ export default async function argon2id(settings) {
   const m_ = 4 * ctx.lanes * Math.floor(ctx.m_cost / (ctx.lanes << 2)); // m'
   const q = m_ / ctx.lanes;
   const B = new Array(ctx.lanes).fill(null).map(() => new Array(q));
+  const initBlock = (i, j) => {
+    B[i][j] = blockMemory.subarray(i*q*1024 + j*1024, (i*q*1024 + j*1024) + ARGON2_BLOCK_SIZE);
+    return B[i][j];
+  }
 
   // const LE0 = LE32(0);
   // const LE1 = LE32(1);
@@ -222,12 +233,13 @@ export default async function argon2id(settings) {
     // 3. Compute B[i][0] for all i ranging from (and including) 0 to (not including) p
     // B[i][0] = H'^(1024)(H_0 || LE32(0) || LE32(i))
     tmp.set(H0); LE32s(tmp, 0, H0.length); LE32s(tmp, i, H0.length + 4); 
-    B[i][0] = H_(ARGON2_BLOCK_SIZE, tmp);
+    H_(ARGON2_BLOCK_SIZE, tmp, initBlock(i, 0));
     // 4. Compute B[i][1] for all i ranging from (and including) 0 to (not including) p
     // B[i][1] = H'^(1024)(H_0 || LE32(1) || LE32(i))
     LE32s(tmp, 1, H0.length);
-    B[i][1] = H_(ARGON2_BLOCK_SIZE, tmp);
+    H_(ARGON2_BLOCK_SIZE, tmp, initBlock(i, 1));
   }
+
     // 5. Compute B[i][j] for all i ranging from (and including) 0 to (not including) p and for all j ranging from (and including) 2
     // to (not including) q. The computation MUST proceed slicewise (Section 3.4) : first, blocks from slice 0 are computed for all lanes
     // (in an arbitrary order of lanes), then blocks from slice 1 are computed, etc.
@@ -248,12 +260,12 @@ export default async function argon2id(settings) {
 
           // we can assume the PRNG is never done
           const [J1, J2] = isDataIndependent ? PRNG.next().value : new Uint32Array([GET32(prevBlock, 0), GET32(prevBlock, 4)]);
-
+          // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
           const [l, z] = getZL(J1, J2, i, ctx.lanes, pass, sl, segmentOffset, SL, segmentLength)
           // for (let i = 0; i < p; i++ )
           // B[i][j] = G(B[i][j-1], B[l][z])
           // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
-          if (pass === 0) B[i][j] = blockMemory.subarray(i*q*1024 + j*1024, (i*q*1024 + j*1024) + ARGON2_BLOCK_SIZE); //new Uint8Array(ARGON2_BLOCK_SIZE)
+          if (pass === 0) initBlock(i, j);
           G(prevBlock, B[l][z],  pass > 0 ? newBlock : B[i][j]);
           // console.log('l' , B[l][z].length, newBlock.length)
           // 6. If the number of passes t is larger than 1, we repeat step 5. However, blocks are computed differently as the old value is XORed with the new one
@@ -271,7 +283,7 @@ export default async function argon2id(settings) {
     XOR(C, C, B[i][q-1])
   }
   // 8. The output tag is computed as H'^T(C).
-  return H_(ctx.outlen, C);
+  return H_(ctx.outlen, C, new Uint8Array(ctx.outlen));
 
 }
 

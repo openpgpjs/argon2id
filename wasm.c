@@ -79,11 +79,11 @@ void GB(uint64_t* v, int a, int b, int c, int d) {
   GB(v, i3,  i4, i9, i14);
 }
 // given a copy of R, compute Z (in-place) 
-EMSCRIPTEN_KEEPALIVE void G(uint64_t* R, uint64_t* Z) {
-
+EMSCRIPTEN_KEEPALIVE void G(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z) {
+  xor(R, X, Y);
   // // we need to store S_i = (v_{2*i+1} || v_{2*i}), for v[i] of 64 bits
   // // S[0] = R[8:15] || R[0:7]
-  for(int i = 0; i < 128; i+=16) {
+  for(uint8_t i = 0; i < 128; i+=16) {
     Z[i+0] = R[i+0]; Z[i+1] = R[i+1]; Z[i+2] = R[i+2]; Z[i+3] = R[i+3];
     Z[i+4] = R[i+4]; Z[i+5] = R[i+5]; Z[i+6] = R[i+6]; Z[i+7] = R[i+7];
     Z[i+8] = R[i+8]; Z[i+9] = R[i+9]; Z[i+10] = R[i+10]; Z[i+11] = R[i+11];
