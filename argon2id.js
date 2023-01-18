@@ -166,11 +166,13 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
     // tmp.set(Z); // no need to re-copy
     LE64s(prngTmp, i, Z.length); // tmp.set(ZER0968) not necessary, memory already zeroed
     const g2 = G2( ZERO1024, prngTmp, prngR );
+    const g2_32 = new Uint32Array(g2.buffer, g2.byteOffset, g2.length / Uint32Array.BYTES_PER_ELEMENT);
+
     // each invocation of G^2 outputs 1024 bytes that are to be partitioned into 8-bytes values, take as X1 || X2
     // NB: the first generated pair must be used for the first block of the segment, and so on.
     // Hence, if some blocks are skipped (e.g. during the first pass), the corresponding J1J2 are discarded based on the given segmentOffset.
-    for(let k = i === 1 ? segmentOffset*8 : 0; k < g2.length; k+= 8) {
-       yield new Uint32Array([GET32(g2, k), GET32(g2, k + 4)])
+    for(let k = i === 1 ? segmentOffset*2 : 0; k < g2_32.length; k+= 2) {
+       yield g2_32.subarray(k, k+2);
     }
   }
   return [];
