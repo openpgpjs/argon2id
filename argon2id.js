@@ -1,10 +1,8 @@
 // TODOs:
 // - SIMD instructions
 // - compute entire segment in wasm (or at least, also the remaining XORs)
-// - test on web
 
 import blake2b from "./blake2b.js"
-import fs from 'fs';
 const KEYBYTES_MAX = 32; // key (optional)
 const ADBYTES_MAX = 0xFFFFFFFF; // Math.pow(2, 32) - 1; // associated data (optional)
 const VERSION = 0x13;
@@ -59,9 +57,9 @@ function GET32 (arr, i) {
     (arr[i + 3] << 24)
 }
 
-const wasmBuffer = fs.readFileSync('wasm.wasm');
 let wasmG;
-
+let wasmG2;
+let wasmXOR;
 let V = new Uint8Array(64); // no need to keep around all V_i
 
 /**
@@ -106,10 +104,12 @@ function H_(outlen, X, res) {
 
 // compute buf = xs ^ ys
 function XOR(buf, xs, ys) {
-  if (xs.length != ys.length) throw new Error('XOR expects array of same length');
-  for (let i = 0; i < xs.length; i++)
-    buf[i] = xs[i] ^ ys[i]
-  return buf;
+  wasmXOR(
+    new BigUint64Array(buf.buffer, buf.byteOffset, buf.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(xs.buffer, xs.byteOffset, xs.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(ys.buffer, ys.byteOffset, ys.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+  );
+  return buf
 }
 
 let wasmZ;
@@ -129,10 +129,14 @@ function G(X, Y, R) {
   return R;
 }
 
-// XOR xs[iX:iX+len] ^= ys[iY:iY+len]
-function XORs(xs, ys, iX, iY, len) {
-  for (let i = 0; i < len; i++)
-    xs[iX + i] = xs[iX + i] ^ ys[iY + i]
+function G2(X, Y, R) {
+  wasmG2(
+    new BigUint64Array(X.buffer, X.byteOffset, X.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(Y.buffer, Y.byteOffset, Y.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    new BigUint64Array(R.buffer, R.byteOffset, R.length / BigUint64Array.BYTES_PER_ELEMENT).byteOffset,
+    wasmZ.byteOffset
+  );
+  return R;
 }
 
 let ZERO1024;
@@ -161,8 +165,7 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
   for(let i = 1; i <= segmentLength; i++) {
     // tmp.set(Z); // no need to re-copy
     LE64s(prngTmp, i, Z.length); // tmp.set(ZER0968) not necessary, memory already zeroed
-    const g2 = G( ZERO1024, G( ZERO1024, prngTmp, prngR ), prngR );
-
+    const g2 = G2( ZERO1024, prngTmp, prngR );
     // each invocation of G^2 outputs 1024 bytes that are to be partitioned into 8-bytes values, take as X1 || X2
     // NB: the first generated pair must be used for the first block of the segment, and so on.
     // Hence, if some blocks are skipped (e.g. during the first pass), the corresponding J1J2 are discarded based on the given segmentOffset.
@@ -192,11 +195,13 @@ export function getZL(J1, J2, currentLane, p, pass, slice, segmentOffset, SL, se
   const z = (startPos + zz) % (SL * segmentLength);
   return [l, z]
 }
-export default async function argon2id(settings) {
+export default async function argon2id(settings, wasmModule) {
   const ctx = { type: TYPE, version: VERSION, outlen: 32, ...settings };
-  const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
-  const {G:wasmG_, memory} = wasmModule.instance.exports;
+  // const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
+  const {G:wasmG_, G2:wasmG2_, xor:wasmXOR_, memory} = wasmModule.instance.exports;
   wasmG=wasmG_;
+  wasmG2=wasmG2_;
+  wasmXOR=wasmXOR_;
   let offset = 0
   wasmZ = new BigUint64Array(memory.buffer, offset, 128); offset+= wasmZ.length*BigUint64Array.BYTES_PER_ELEMENT;
   const newBlock = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=newBlock.length;

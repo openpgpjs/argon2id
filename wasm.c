@@ -31,7 +31,7 @@ EMSCRIPTEN_KEEPALIVE uint64_t umul64(uint64_t a, uint64_t b)
 uint64_t rotr64(uint64_t x, uint64_t n) { return (x >> n) ^ (x << (64 - n)); }
 
 #define LSB(x) ((x) & 0xffffffff)
-void xor(uint64_t* out, uint64_t* x, uint64_t* y){for(uint8_t i = 0; i < 128; i++) out[i] = x[i] ^ y[i];}
+EMSCRIPTEN_KEEPALIVE void xor(uint64_t* out, uint64_t* x, uint64_t* y){for(uint8_t i = 0; i < 128; i++) out[i] = x[i] ^ y[i];}
 
 
 void GB(uint64_t* v, int a, int b, int c, int d) {
@@ -108,6 +108,11 @@ EMSCRIPTEN_KEEPALIVE void G(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z) 
   }
 
   xor(R, R, Z);
+}
+
+EMSCRIPTEN_KEEPALIVE void G2(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z) {
+  G( X, Y, R, Z );
+  G( X, R, R, Z );
 }
 
 
