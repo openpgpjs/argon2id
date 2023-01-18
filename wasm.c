@@ -1,33 +1,142 @@
+/**
+ * Vectorised code mostly taken from: Argon2 reference C implementations (www.github.com/P-H-C/phc-winner-argon2)
+ * Copyright 2015 Daniel Dinu, Dmitry Khovratovich, Jean-Philippe Aumasson, and Samuel Neves
+ * Licence: CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0)
+ */
 #include <stdint.h>
 // #include <stdio.h>
 #undef EMSCRIPTEN_KEEPALIVE
 #define EMSCRIPTEN_KEEPALIVE __attribute__((used)) __attribute__((retain))
-EMSCRIPTEN_KEEPALIVE uint64_t umul64(uint64_t a, uint64_t b)
-{
-    // uint64_t a_lo = (uint64_t)(uint32_t)a;
-    // uint64_t a_hi = a >> 32;
-    // uint64_t b_lo = (uint64_t)(uint32_t)b;
-    // uint64_t b_hi = b >> 32;
 
-    // uint64_t p0 = a_lo * b_lo;
-    // uint64_t p1 = a_lo * b_hi;
-    // uint64_t p2 = a_hi * b_lo;
-    // // uint64_t p3 = a_hi * b_hi;
+#if defined(__SSE2__)
+#include <emmintrin.h>
 
-    // uint32_t cy = (uint32_t)(((p0 >> 32) + (uint32_t)p1 + (uint32_t)p2) >> 32);
-
-    // uint64_t res = p0 + (p1 << 32) + (p2 << 32);
-    uint64_t res = a * b;
-
-    return res;
-    // *hi = p3 + (p1 >> 32) + (p2 >> 32) + cy;
+#define _mm_roti_epi64(r, c)                                                   \
+    _mm_xor_si128(_mm_srli_epi64((r), -(c)), _mm_slli_epi64((r), 64 - (-(c))))
+static __m128i fBlaMka(__m128i x, __m128i y) {
+    const __m128i z = _mm_mul_epu32(x, y);
+    return _mm_add_epi64(_mm_add_epi64(x, y), _mm_add_epi64(z, z));
 }
 
+#define GB1(A0, B0, C0, D0, A1, B1, C1, D1)                                \
+  do {                                                                     \
+    A0 = fBlaMka(A0, B0);                                                  \
+    A1 = fBlaMka(A1, B1);                                                  \
+                                                                           \
+    D0 = _mm_xor_si128(D0, A0);                                            \
+    D1 = _mm_xor_si128(D1, A1);                                            \
+                                                                           \
+    D0 = _mm_roti_epi64(D0, -32);                                          \
+    D1 = _mm_roti_epi64(D1, -32);                                          \
+                                                                           \
+    C0 = fBlaMka(C0, D0);                                                  \
+    C1 = fBlaMka(C1, D1);                                                  \
+                                                                           \
+    B0 = _mm_xor_si128(B0, C0);                                            \
+    B1 = _mm_xor_si128(B1, C1);                                            \
+                                                                           \
+    B0 = _mm_roti_epi64(B0, -24);                                          \
+    B1 = _mm_roti_epi64(B1, -24);                                          \
+  } while ((void)0, 0) 
 
-// int main()
-// {
-//   printf("loaded\n");
-// }
+#define GB2(A0, B0, C0, D0, A1, B1, C1, D1)                                \
+  do {                                                                     \
+    A0 = fBlaMka(A0, B0);                                                  \
+    A1 = fBlaMka(A1, B1);                                                  \
+                                                                           \
+    D0 = _mm_xor_si128(D0, A0);                                            \
+    D1 = _mm_xor_si128(D1, A1);                                            \
+                                                                           \
+    D0 = _mm_roti_epi64(D0, -16);                                          \
+    D1 = _mm_roti_epi64(D1, -16);                                          \
+                                                                           \
+    C0 = fBlaMka(C0, D0);                                                  \
+    C1 = fBlaMka(C1, D1);                                                  \
+                                                                           \
+    B0 = _mm_xor_si128(B0, C0);                                            \
+    B1 = _mm_xor_si128(B1, C1);                                            \
+                                                                           \
+    B0 = _mm_roti_epi64(B0, -63);                                          \
+    B1 = _mm_roti_epi64(B1, -63);                                          \
+  } while ((void)0, 0)
+#define DIAGONALIZE(A0, B0, C0, D0, A1, B1, C1, D1)                        \
+  do {                                                                     \
+    __m128i t0 = D0;                                                       \
+    __m128i t1 = B0;                                                       \
+    D0 = C0;                                                               \
+    C0 = C1;                                                               \
+    C1 = D0;                                                               \
+    D0 = _mm_unpackhi_epi64(D1, _mm_unpacklo_epi64(t0, t0));               \
+    D1 = _mm_unpackhi_epi64(t0, _mm_unpacklo_epi64(D1, D1));               \
+    B0 = _mm_unpackhi_epi64(B0, _mm_unpacklo_epi64(B1, B1));               \
+    B1 = _mm_unpackhi_epi64(B1, _mm_unpacklo_epi64(t1, t1));               \
+  } while ((void)0, 0)
+
+#define UNDIAGONALIZE(A0, B0, C0, D0, A1, B1, C1, D1)                      \
+  do {                                                                     \
+    __m128i t0, t1;                                                        \
+    t0 = C0;                                                               \
+    C0 = C1;                                                               \
+    C1 = t0;                                                               \
+    t0 = B0;                                                               \
+    t1 = D0;                                                               \
+    B0 = _mm_unpackhi_epi64(B1, _mm_unpacklo_epi64(B0, B0));               \
+    B1 = _mm_unpackhi_epi64(t0, _mm_unpacklo_epi64(B1, B1));               \
+    D0 = _mm_unpackhi_epi64(D0, _mm_unpacklo_epi64(D1, D1));               \
+    D1 = _mm_unpackhi_epi64(D1, _mm_unpacklo_epi64(t1, t1));               \
+  } while ((void)0, 0)
+
+// BLAKE2_ROUND in reference code
+#define P(A0, A1, B0, B1, C0, C1, D0, D1)                                  \
+  do {                                                                     \
+    GB1(A0, B0, C0, D0, A1, B1, C1, D1);                                   \
+    GB2(A0, B0, C0, D0, A1, B1, C1, D1);                                   \
+                                                                           \
+    DIAGONALIZE(A0, B0, C0, D0, A1, B1, C1, D1);                           \
+                                                                           \
+    GB1(A0, B0, C0, D0, A1, B1, C1, D1);                                   \
+    GB2(A0, B0, C0, D0, A1, B1, C1, D1);                                   \
+                                                                           \
+    UNDIAGONALIZE(A0, B0, C0, D0, A1, B1, C1, D1);                         \
+  } while ((void)0, 0)
+
+
+EMSCRIPTEN_KEEPALIVE void xor(__m128i* out, __m128i* x, __m128i* y){
+  for(uint8_t i = 0; i < 64; i++) { // ARGON2_BLOCK_SIZE (1024) / 16 bytes (128bits) = 64
+    out[i] = _mm_xor_si128(x[i], y[i]);
+  }
+}
+
+// G will be given uint64_t* values by JS, which can be automatically casted to _m128i*:
+// see https://stackoverflow.com/questions/11034302/sse-difference-between-mm-load-store-vs-using-direct-pointer-access
+EMSCRIPTEN_KEEPALIVE void G(__m128i* X, __m128i* Y, __m128i* R, __m128i* Z) {
+    for (uint8_t i = 0; i < 64; i++) { // inlined `xor` to set both R and Z
+      R[i] = Z[i] = _mm_xor_si128(X[i], Y[i]);
+    }
+
+    for (uint8_t i = 0; i < 8; ++i) {
+      P(Z[8 * i + 0], Z[8 * i + 1], Z[8 * i + 2],
+        Z[8 * i + 3], Z[8 * i + 4], Z[8 * i + 5],
+        Z[8 * i + 6], Z[8 * i + 7]);
+    }
+
+    for (uint8_t i = 0; i < 8; ++i) {
+      P(Z[8 * 0 + i], Z[8 * 1 + i], Z[8 * 2 + i],
+        Z[8 * 3 + i], Z[8 * 4 + i], Z[8 * 5 + i],
+        Z[8 * 6 + i], Z[8 * 7 + i]);
+    }
+
+    xor(R, R, Z);
+}
+
+// G^2
+EMSCRIPTEN_KEEPALIVE void G2(__m128i* X, __m128i* Y, __m128i* R, __m128i* Z) {
+  G( X, Y, R, Z );
+  G( X, R, R, Z );
+}
+
+#else // no vectorization
+
 uint64_t rotr64(uint64_t x, uint64_t n) { return (x >> n) ^ (x << (64 - n)); }
 
 #define LSB(x) ((x) & 0xffffffff)
@@ -65,7 +174,7 @@ void GB(uint64_t* v, int a, int b, int c, int d) {
 
 }
 
- void P(uint64_t* v, uint16_t i0,uint16_t i1,uint16_t i2,uint16_t i3,uint16_t i4,uint16_t i5,uint16_t i6,uint16_t i7, uint16_t i8,uint16_t i9,uint16_t i10,uint16_t i11,uint16_t i12,uint16_t i13,uint16_t i14,uint16_t i15) {
+void P(uint64_t* v, uint16_t i0,uint16_t i1,uint16_t i2,uint16_t i3,uint16_t i4,uint16_t i5,uint16_t i6,uint16_t i7, uint16_t i8,uint16_t i9,uint16_t i10,uint16_t i11,uint16_t i12,uint16_t i13,uint16_t i14,uint16_t i15) {
   // v stores 16 64-bit values
 
   GB(v, i0,  i4, i8, i12);
@@ -108,23 +217,13 @@ EMSCRIPTEN_KEEPALIVE void G(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z) 
   }
 
   xor(R, R, Z);
+  
 }
 
+// G^2
 EMSCRIPTEN_KEEPALIVE void G2(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z) {
   G( X, Y, R, Z );
   G( X, R, R, Z );
 }
-
-
-// EMSCRIPTEN_KEEPALIVE void allGB(uint64_t* v) {
-//   GB(v, 0,  4, 8, 12);
-//   GB(v, 1,  5, 9, 13);
-//   GB(v, 2, 6, 10, 14);
-//   GB(v, 3, 7, 11, 15);
-
-//   GB(v, 0, 5, 10, 15);
-//   GB(v, 1, 6, 11, 12);
-//   GB(v, 2, 7, 8, 13);
-//   GB(v, 3,  4, 9, 14);
-// }
+#endif
 
