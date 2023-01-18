@@ -20,15 +20,6 @@ function INC64 (a, c) {
   a[1] += (a[0] < c);
 }
 
-// Reconstruct Uint32 from Uint8Array entries a[i : i+3] (as little-endian)
-function GET32 (arr, i) {
-  // Must load bytes individually since default Uint32 endianness is platform dependant
-  return arr[i] |
-    (arr[i + 1] << 8) |
-    (arr[i + 2] << 16) |
-    (arr[i + 3] << 24)
-}
-
 // G Mixing function
 // The ROTRs are inlined for speed
 function G (v, m, a, b, c, d, ix, iy) {
@@ -96,24 +87,17 @@ const SIGMA = new Uint8Array([
 // Note: we're representing 16 uint64s as 32 uint32s
 function compress(S, last) {
   const v = new Uint32Array(32)
-  const m = new Uint32Array(32)
-
-  let i = 0
-
-  // get little-endian words
-  for (i = 0; i < 32; i++) {
-    m[i] = GET32(S.b, i << 2)
-  }
+  const m = new Uint32Array(S.b.buffer, S.b.byteOffset, 32)
 
   // init work variables
-  for (i = 0; i < 16; i++) {
+  for (let i = 0; i < 16; i++) {
     v[i] = S.h[i]
     v[i + 16] = BLAKE2B_IV32[i]
   }
 
   // low 64 bits of offset
-  v[24] = v[24] ^ S.t0[0]
-  v[25] = v[25] ^ S.t0[1]
+  v[24] ^= S.t0[0]
+  v[25] ^= S.t0[1]
   // high 64 bits not supported (`t1`), offset may not be higher than 2**53-1
 
   // if last block
@@ -122,7 +106,7 @@ function compress(S, last) {
   v[29] ^= f0;
 
   // twelve rounds of mixing
-  for (i = 0; i < 12; i++) {
+  for (let i = 0; i < 12; i++) {
     // ROUND(r)
     const i16 = i << 4;
     G(v, m, 0, 8, 16, 24,  SIGMA[i16 + 0], SIGMA[i16 + 1])
@@ -135,7 +119,7 @@ function compress(S, last) {
     G(v, m, 6, 8, 18, 28,  SIGMA[i16 + 14], SIGMA[i16 + 15])
   }
 
-  for (i = 0; i < 16; i++) {
+  for (let i = 0; i < 16; i++) {
     S.h[i] ^= v[i] ^ v[i + 16]
   }
 }
@@ -179,10 +163,11 @@ class Blake2b {
     params[3] = 1 // depth
     if (salt) params.set(salt, 32)
     if (personal) params.set(personal, 48)
+    const params32 = new Uint32Array(params.buffer, params.byteOffset, params.length / Uint32Array.BYTES_PER_ELEMENT);
 
     // initialize hash state
     for (let i = 0; i < 16; i++) {
-      this.S.h[i] = BLAKE2B_IV32[i] ^ GET32(params, i << 2)
+      this.S.h[i] = BLAKE2B_IV32[i] ^ params32[i];
     }
 
     // key the hash, if applicable
