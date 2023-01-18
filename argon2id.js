@@ -295,50 +295,73 @@ export default async function argon2id(settings, wasmModule) {
 function getH0(ctx) {
   const H = blake2b(ARGON2_PREHASH_DIGEST_LENGTH);
   const ZERO32 = new Uint8Array(4);
-  let tmp = new Uint8Array(24);
-  LE32s(tmp, ctx.lanes, 0);
-  LE32s(tmp, ctx.outlen, 4);
-  LE32s(tmp, ctx.m_cost, 8);
-  LE32s(tmp, ctx.passes, 12);
-  LE32s(tmp, ctx.version, 16);
-  LE32s(tmp, ctx.type, 20);
-  H.update(tmp);
+  const params = new Uint8Array(24);
+  LE32s(params, ctx.lanes, 0);
+  LE32s(params, ctx.outlen, 4);
+  LE32s(params, ctx.m_cost, 8);
+  LE32s(params, ctx.passes, 12);
+  LE32s(params, ctx.version, 16);
+  LE32s(params, ctx.type, 20);
 
-  tmp = tmp.subarray(0, 4); // reuse to store 32-bit values below
+  const toHash = [params];
   if (ctx.pwd) {
-    H.update(LE32s(tmp, ctx.pwd.length, 0));
-    H.update(ctx.pwd)
+    toHash.push(LE32s(new Uint8Array(4), ctx.pwd.length, 0))
+    toHash.push(ctx.pwd)
     // TODO clear pwd?
   } else {
-    H.update(ZERO32) // context.pwd.length
+    throw new Error('pwd expected') // ??
+    toHash.push(ZERO32) // context.pwd.length
   }
 
   if (ctx.salt) {
-    H.update(LE32s(tmp, ctx.salt.length, 0))
-    H.update(ctx.salt)
+    toHash.push(LE32s(new Uint8Array(4), ctx.salt.length, 0))
+    toHash.push(ctx.salt)
   } else {
-    H.update(ZERO32) // context.salt.length
+    throw new Error('salt expected') // ??
+    toHash.push(ZERO32) // context.salt.length
   }
 
   if (ctx.secret) {
-    H.update(LE32s(tmp, ctx.secret.length, 0))
-    H.update(ctx.secret)
+    toHash.push(LE32s(new Uint8Array(4), ctx.secret.length, 0))
+    toHash.push(ctx.secret)
     // todo clear secret?
   } else {
-    H.update(ZERO32) // context.secret.length
+    toHash.push(ZERO32) // context.secret.length
   }
 
   if (ctx.ad) {
-    H.update(LE32s(tmp, ctx.ad.length, 0))
-    H.update(ctx.ad)
+    toHash.push(LE32s(new Uint8Array(4), ctx.ad.length, 0))
+    toHash.push(ctx.ad)
   } else {
-    H.update(ZERO32) // context.ad.length
+    toHash.push(ZERO32) // context.ad.length
   }
+  H.update(concatArrays(toHash))
 
   const outputBuffer = H.digest();
   return new Uint8Array(outputBuffer);
 }
 
+function concatArrays(arrays) {
+  if (arrays.length === 1) return arrays[0];
+
+  let totalLength = 0;
+  for (let i = 0; i < arrays.length; i++) {
+      if (!(arrays[i] instanceof Uint8Array)) {
+          throw new Error('concatArrays: Data must be in the form of a Uint8Array');
+      }
+
+      totalLength += arrays[i].length;
+  }
+
+  const result = new Uint8Array(totalLength);
+  let pos = 0;
+  arrays.forEach((element) => {
+      result.set(element, pos);
+      pos += element.length;
+  });
+
+  return result;
+}
 
 
 
