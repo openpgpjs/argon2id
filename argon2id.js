@@ -47,16 +47,6 @@ function LE64s(buf, n, i) {
   return buf;
 }
 
-// Reconstruct Uint32 from Uint8Array entries a[i : i+3] (as little-endian)
-// NB result must be stored in Uint32Array to avoid overflow
-function GET32 (arr, i) {
-  // Must load bytes individually since default Uint32 endianness is platform dependant
-  return arr[i] |
-    (arr[i + 1] << 8) |
-    (arr[i + 2] << 16) |
-    (arr[i + 3] << 24)
-}
-
 let wasmG;
 let wasmG2;
 let wasmXOR;
@@ -178,29 +168,10 @@ function* makePRNG(pass, lane, slice, m_, totalPasses, segmentLength, segmentOff
   return [];
 }
 
-export function getZL(J1, J2, currentLane, p, pass, slice, segmentOffset, SL, segmentLength) {
-  // For the first pass (r=0) and the first slice (sl=0), the block is taken from the current lane.
-  const l = (pass === 0 && slice === 0) ? currentLane : J2 % p;
-
-  // W includes the indices of all blocks in the last SL - 1 = 3 segments computed and finished (possibly from previous pass, if any).
-  // Plus, if `l` is on the current lane, we can also reference the finished blocks in the current segment (up to 'offset')
-  const offset = l === currentLane
-    ? segmentOffset - 1
-    : segmentOffset === 0 ? -1 : 0; // If B[i][j] is the first block of a segment, then the very last index from W is excluded.
-  const segmentCount = pass === 0 ? slice : SL-1;
-  const W_area  = segmentCount * segmentLength + offset;
-  const x = (BigInt(J1) * BigInt(J1)) >> BigInt(32);
-  const y = (BigInt(W_area) * x) >> BigInt(32);
-  const zz = W_area - 1 - Number(y);
-  const startPos = pass === 0 ? 0 : (slice + 1) * segmentLength; // next segment (except for first pass)
-  // TODO optimisation: zz < 2 * (SL * segmentLength) so we can use an if instead of %
-  const z = (startPos + zz) % (SL * segmentLength);
-  return [l, z]
-}
 export default async function argon2id(settings, wasmModule) {
   const ctx = { type: TYPE, version: VERSION, outlen: 32, ...settings };
-  // const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
-  const {G:wasmG_, G2:wasmG2_, xor:wasmXOR_, memory} = wasmModule.instance.exports;
+
+  const {G:wasmG_, G2:wasmG2_, xor:wasmXOR_, getLZ:wasmLZ, memory} = wasmModule.instance.exports;
   wasmG=wasmG_;
   wasmG2=wasmG2_;
   wasmXOR=wasmXOR_;
@@ -211,14 +182,10 @@ export default async function argon2id(settings, wasmModule) {
   prngR = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=prngR.length;
   prngTmp = new Uint8Array(memory.buffer, offset, ARGON2_BLOCK_SIZE); offset+=prngTmp.length;
   ZERO1024 = new Uint8Array(memory.buffer, offset, 1024); offset+=ZERO1024.length;
+  // end makePRNG vars
+  const lz = new Uint32Array(memory.buffer, offset, 2); offset+=lz.length * Uint32Array.BYTES_PER_ELEMENT;
   const blockMemory = new Uint8Array(memory.buffer, offset, ctx.m_cost * ARGON2_BLOCK_SIZE)
 
-  // blockMemory.fill(4)
-  // wasmGB=GB; allGB=all;wasmMemory=memory;
-  // Create an array that can be passed to the WebAssembly instance.
-  // v = new BigUint64Array(wasmMemory.buffer, 0, 16)
-  // v32 = new Uint32Array(v.buffer)
-    
   // 1. Establish H_0
   const H0 = getH0(ctx);
 
@@ -266,9 +233,11 @@ export default async function argon2id(settings, wasmModule) {
           const prevBlock = j > 0 ? B[i][j-1] : B[i][q-1]; // B[i][(j-1) mod q]
 
           // we can assume the PRNG is never done
-          const [J1, J2] = isDataIndependent ? PRNG.next().value : new Uint32Array([GET32(prevBlock, 0), GET32(prevBlock, 4)]);
+          const [J1, J2] = isDataIndependent ? PRNG.next().value : new Uint32Array(prevBlock.buffer, prevBlock.byteOffset, 2);
           // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
-          const [l, z] = getZL(J1, J2, i, ctx.lanes, pass, sl, segmentOffset, SL, segmentLength)
+          wasmLZ(lz.byteOffset, J1, J2, i, ctx.lanes, pass, sl, segmentOffset, SL, segmentLength)
+          const l = lz[0];
+          const z = lz[1];
           // for (let i = 0; i < p; i++ )
           // B[i][j] = G(B[i][j-1], B[l][z])
           // The block indices l and z are determined for each i, j differently for Argon2d, Argon2i, and Argon2id.
@@ -277,7 +246,6 @@ export default async function argon2id(settings, wasmModule) {
           // console.log('l' , B[l][z].length, newBlock.length)
           // 6. If the number of passes t is larger than 1, we repeat step 5. However, blocks are computed differently as the old value is XORed with the new one
           if (pass > 0) XOR(B[i][j], newBlock, B[i][j])
-          // B[i][j] = newNewBlock;
         }
       }
     }
