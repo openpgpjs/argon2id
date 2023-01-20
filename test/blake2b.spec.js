@@ -1,6 +1,7 @@
 import test from 'tape';
 import blake2b from '../blake2b.js';
 import vectors from './blake2b.vectors.json' assert { type: "json" };
+import { hexToUint8Array } from './utils.js';
 
 runTests()
 
@@ -105,16 +106,3 @@ function runTests () {
   })
 }
 
-function hexToUint8Array (string) {
-  const buf = new Uint8Array(string.length / 2);
-  // must be an even number of digits
-  var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
-
-  for (let i = 0; i < strLen / 2; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (Number.isNaN(parsed)) throw new Error('Invalid byte')
-    buf[i] = parsed
-  }
-  return buf
-}

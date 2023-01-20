@@ -1,5 +1,7 @@
 import test from 'tape';
-import { uint8ArrayToHex, default as argon2id } from '../argon2id.js';
+import argon2id from '../argon2id.js';
+import { hexToUint8Array, uint8ArrayToHex } from './utils.js';
+
 import fs from 'fs';
 const wasmBuffer = fs.readFileSync('wasm.wasm');
 
@@ -25,7 +27,7 @@ function runTests () {
   test('Test vector, 1 pass', async function (assert) {
     const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
     const expected = '717fd03e48737c93e05cebb669c886322d6a23a9fd23ee2615100dff74e69213';
-    const tagT1 = await argon2id({
+    const tagT1 = argon2id({
       pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
       salt: hexToUint8Array('02020202020202020202020202020202'),
       passes: 1, m_cost:32, lanes: 4,
@@ -39,7 +41,7 @@ function runTests () {
   test('Test vector, 3 passes', async function (assert) {
     const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
     const expected = '0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659';
-    const tagT3 = await argon2id({
+    const tagT3 = argon2id({
       pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
       salt: hexToUint8Array('02020202020202020202020202020202'),
       passes: 3, m_cost:32, lanes: 4,
@@ -57,7 +59,7 @@ function runTests () {
     // But the corresponding pseudo-random values should still be generated, and discarded.
     // This test checks that the following columns use the expected pseudo-random J1 and J2.
     const expected = '47c71919daf18f9d1756391f1f9f4a7df3aa9608128965f1e84c0d6fcc34db87';
-    const tag = await argon2id({
+    const tag = argon2id({
       pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
       salt: hexToUint8Array('02020202020202020202020202020202'),
       passes: 3, m_cost:32, lanes: 2,
@@ -67,18 +69,17 @@ function runTests () {
     assert.equals(uint8ArrayToHex(tag), expected);
     assert.end()
   });
-}
 
-function hexToUint8Array (string) {
-  const buf = new Uint8Array(string.length / 2);
-  // must be an even number of digits
-  var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
+  test('Test lowest recommended settings', async function (assert) {
+    const wasmModule = await WebAssembly.instantiate(wasmBuffer, {});
 
-  for (let i = 0; i < strLen / 2; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (Number.isNaN(parsed)) throw new Error('Invalid byte')
-    buf[i] = parsed
-  }
-  return buf
+    const expected = '6904f1422410f8360c6538300210a2868f5e80cd88606ec7d6e7e93b49983cea';
+    const tag = argon2id({
+      pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+      salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
+      passes: 3, m_cost: Math.pow(2, 16), lanes: 4
+    }, wasmModule);
+    assert.equals(uint8ArrayToHex(tag), expected);
+    assert.end()
+  });
 }
