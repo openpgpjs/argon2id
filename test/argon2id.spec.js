@@ -1,5 +1,5 @@
 import test from 'tape';
-import argon2id from '../argon2id.js';
+import argon2id from '../lib/argon2id.js';
 import { hexToUint8Array, uint8ArrayToHex } from './utils.js';
 
 import fs from 'fs';
@@ -33,7 +33,7 @@ function runTests () {
       passes: 1, m_cost:32, lanes: 4,
       secret: hexToUint8Array('0303030303030303'),
       ad: hexToUint8Array('040404040404040404040404')
-    }, wasmModule);
+    }, wasmModule.instance);
     assert.equals(uint8ArrayToHex(tagT1), expected);
     assert.end()
   });
@@ -47,7 +47,7 @@ function runTests () {
       passes: 3, m_cost:32, lanes: 4,
       secret: hexToUint8Array('0303030303030303'),
       ad: hexToUint8Array('040404040404040404040404')
-    }, wasmModule);
+    }, wasmModule.instance);
     assert.equals(uint8ArrayToHex(tagT3), expected);
     assert.end()
   });
@@ -65,7 +65,7 @@ function runTests () {
       passes: 3, m_cost:32, lanes: 2,
       secret: hexToUint8Array('0303030303030303'),
       ad: hexToUint8Array('040404040404040404040404')
-    }, wasmModule);
+    }, wasmModule.instance);
     assert.equals(uint8ArrayToHex(tag), expected);
     assert.end()
   });
@@ -78,7 +78,7 @@ function runTests () {
       pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
       salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
       passes: 3, m_cost: Math.pow(2, 16), lanes: 4
-    }, wasmModule);
+    }, wasmModule.instance);
     assert.equals(uint8ArrayToHex(tag), expected);
     assert.end()
   });

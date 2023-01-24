@@ -1,5 +1,5 @@
 import test from 'tape';
-import blake2b from '../blake2b.js';
+import blake2b from '../lib/blake2b.js';
 import vectors from './blake2b.vectors.json' assert { type: "json" };
 import { hexToUint8Array } from './utils.js';
 
