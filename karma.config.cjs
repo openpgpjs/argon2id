@@ -25,6 +25,7 @@ module.exports = function(config) {
             'karma-webkit-launcher',
             'karma-webpack',
             'karma-spec-reporter',
+            'karma-browserstack-launcher'
         ],
 
         // list of files / patterns to load in the browser
@@ -86,6 +87,35 @@ module.exports = function(config) {
         // enable / disable watching file and executing tests whenever any file changes
         autoWatch: false,
 
+        browserDisconnectTimeout: 30000,
+        browserNoActivityTimeout : 300000, // ms, by default 10000
+        captureTimeout: 300000, // default is 60000
+
+        browserStack: {
+            username: process.env.BROWSERSTACK_USERNAME,
+            accessKey: process.env.BROWSERSTACK_ACCESS_KEY,
+            build: process.env.GITHUB_SHA,
+            name: process.env.GITHUB_WORKFLOW,
+            project: `argon2id/${process.env.GITHUB_EVENT_NAME || 'push'}`,
+            retryLimit: 1
+        },
+
+        customLaunchers: { // don't forget to pass these manually in the CI workflow
+            bs_safari_13_1: { // no BigInt support
+              base: 'BrowserStack',
+              browser: 'Safari',
+              browser_version: '13.1',
+              os: 'OS X',
+              os_version: 'Catalina'
+            },
+            bs_ios_14: {
+              base: 'BrowserStack',
+              device: 'iPhone 12',
+              real_mobile: true,
+              os: 'ios',
+              os_version: '14'
+            }
+          },
 
         browsers: ['ChromeHeadless', 'FirefoxHeadless', 'WebkitHeadless'],
 
