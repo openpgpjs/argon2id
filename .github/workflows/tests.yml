@@ -20,7 +20,7 @@ jobs:
         uses: addnab/docker-run-action@v3
         with:
           image: emscripten/emsdk
-          options: -v ${{ github.workspace }}:/src
+          options: -v ${{ github.workspace }}:/src -e CI
           run: |
             mkdir dist && ./build-wasm.sh
 
