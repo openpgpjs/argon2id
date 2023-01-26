@@ -18,6 +18,7 @@ jobs:
             image: emscripten/emsdk
             options: -v ${{ github.workspace }}:/src
             run: |
+              mkdir dist
               emcc -O3 --no-entry -sWASM_BIGINT -sWASM=1 lib/wasm.c -o dist/no-simd.wasm -sTOTAL_MEMORY=2000mb
               emcc -O3 --no-entry -sWASM_BIGINT -msimd128 -msse2 -sWASM=1 lib/wasm.c -o dist/simd.wasm -sTOTAL_MEMORY=2000mb
 
