@@ -5,35 +5,70 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  build-wasm:
     runs-on: ubuntu-latest
+    steps:
+      - name: Check for cached dist folder
+        id: cache-wasm
+        uses: actions/cache@v3
+        with:
+          path: dist
+          key: dist-${{ hashFiles('**/wasm.c', '**/build-wasm.sh') }}
+      - name: Build wasm binaries
+        if: steps.cache-wasm.outputs.cache-hit != 'true'
+        uses: addnab/docker-run-action@v3
+        with:
+          image: emscripten/emsdk
+          options: -v ${{ github.workspace }}:/src
+          run: |
+            mkdir dist && ./build-wasm.sh
 
+  test-browsers:
+    runs-on: ubuntu-latest
+    needs: build-wasm
+    
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v3
 
-      - name: Build wasm binaries
-        uses: addnab/docker-run-action@v3
-        with:
-            image: emscripten/emsdk
-            options: -v ${{ github.workspace }}:/src
-            run: |
-              mkdir dist
-              emcc -O3 --no-entry -sWASM_BIGINT -sWASM=1 lib/wasm.c -o dist/no-simd.wasm -sTOTAL_MEMORY=2000mb
-              emcc -O3 --no-entry -sWASM_BIGINT -msimd128 -msse2 -sWASM=1 lib/wasm.c -o dist/simd.wasm -sTOTAL_MEMORY=2000mb
-
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chrome
-        run: npx playwright install-deps chrome
+      - name: Retrieve cached dist folder
+        uses: actions/cache/restore@v3
+        id: cache-wasm
+        with:
+          path: dist
+          key: dist-${{ hashFiles('**/wasm.c', '**/build-wasm.sh') }}
+        # ignore cache miss, since it was taken care of the `build-wasm` step and it should never occur here
+      - run: npm test # TODOOOOOOO remove, just for quickly testing if everything works
+      # - name: Install Chrome
+      #   run: npx playwright install-deps chrome
 
-      - name: Install Firefox
-        run: npx playwright install-deps firefox
+      # - name: Install Firefox
+      #   run: npx playwright install-deps firefox
 
-      - name: Install Webkit
-        run: npx playwright install-deps webkit
+      # - name: Install Webkit
+      #   run: npx playwright install-deps webkit
 
-      - name: Run tests
-        run: npm test
+      # - name: Run browser tests
+      #   run: npm run test-browser
+
+  # test-node:
+  #   runs-on: ubuntu-latest
+  #   needs: build-wasm
+    
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - uses: actions/setup-node@v3
+
+  #     - name: Install dependencies
+  #       run: npm ci
+
+  #     - name: Retrieve dist folder
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: dist
+
+  #     - name: Run node tests
+  #       run: npm test
