@@ -78,7 +78,7 @@ jobs:
         # ignore cache miss, since it was taken care of the `build-wasm` step and it should never occur here
 
       - name: Run browserstack tests
-        run: npm run test-browser -- --browsers bs_safari_13_1
+        run: npm run test-browser -- --browsers bs_ios_14,bs_safari_13_1
 
   test-node:
     runs-on: ubuntu-latest
