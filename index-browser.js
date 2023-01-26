@@ -22,6 +22,6 @@ function decodeWasmBinary(base64) {
 export default async function load() {
   return setupWasmLoader(
     () => decodeWasmBinary(wasmSIMD),
-    () => decodeWasmBinary(wasmNonSIMD)
+    () => decodeWasmBinary(wasmSIMD)
   );
 }
