@@ -1,0 +1,38 @@
+on:
+  push:
+    branches: [main, test-build-ci]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+
+      - name: Build wasm binaries
+        uses: addnab/docker-run-action@v3
+        with:
+            image: emscripten/emsdk
+            options: -v ${{ github.workspace }}:/src
+            run: |
+              emcc -O3 --no-entry -sWASM_BIGINT -sWASM=1 lib/wasm.c -o dist/no-simd.wasm -sTOTAL_MEMORY=2000mb
+              emcc -O3 --no-entry -sWASM_BIGINT -msimd128 -msse2 -sWASM=1 lib/wasm.c -o dist/simd.wasm -sTOTAL_MEMORY=2000mb
+
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        run: npx playwright install-deps chrome
+
+      - name: Install Firefox
+        run: npx playwright install-deps firefox
+
+      - name: Install Webkit
+        run: npx playwright install-deps webkit
+
+      - name: Run tests
+        run: npm test
