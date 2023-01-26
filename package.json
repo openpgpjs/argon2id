@@ -2,23 +2,43 @@
   "name": "argon2id",
   "version": "0.0.0",
   "description": "Argon2id implementation in pure Javascript",
-  "main": "index.js",
+  "browser": "index-browser.js",
+  "main": "index-node.js",
   "type": "module",
   "scripts": {
     "test": "tape-es test/blake2b.spec.js | tap-spec && tape-es test/argon2id.spec.js | tap-spec",
-    "lint": "eslint index.js"
+    "lint": "eslint index.js",
+    "build": "rm -rf dist && mkdir dist && ./build-wasm.sh",
+    "test-browser": "karma start karma.config.cjs"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/openpgpjs/argon2id.git"
   },
-  "keywords": ["argon2", "argon2id", "rfc9106"],
+  "keywords": [
+    "argon2",
+    "argon2id",
+    "rfc9106"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.38.0",
     "@typescript-eslint/parser": "^5.38.0",
-    "eslint": "^8.19.0",
+    "base64-loader": "^1.0.0",
+    "eslint": "^8.32.0",
+    "eslint-plugin-import": "^2.27.5",
+    "karma": "^6.4.1",
+    "karma-chrome-launcher": "^3.1.1",
+    "karma-firefox-launcher": "^2.1.2",
+    "karma-spec-reporter": "^0.0.36",
+    "karma-tape": "^0.0.1",
+    "karma-webkit-launcher": "^2.1.0",
+    "karma-webpack": "^5.0.0",
+    "playwright": "^1.30.0",
+    "string-replace-loader": "^3.1.0",
     "tap-spec": "^5.0.0",
-    "tape-es": "^1.2.17"
+    "tape-es": "^1.2.17",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1"
   }
 }
