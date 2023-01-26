@@ -96,15 +96,22 @@ module.exports = function(config) {
             timeout: 60
         },
 
-        customLaunchers: {
+        customLaunchers: { // don't forget to pass these manually in the CI workflow
             bs_safari_13_1: { // no BigInt support
-                base: 'BrowserStack',
-                browser: 'Safari',
-                browser_version: '13.1',
-                os: 'OS X',
-                os_version: 'Catalina'
+              base: 'BrowserStack',
+              browser: 'Safari',
+              browser_version: '13.1',
+              os: 'OS X',
+              os_version: 'Catalina'
             },
-        },
+            bs_ios_14: {
+              base: 'BrowserStack',
+              device: 'iPhone 12',
+              real_mobile: true,
+              os: 'ios',
+              os_version: '14'
+            }
+          },
 
         browsers: ['ChromeHeadless', 'FirefoxHeadless', 'WebkitHeadless'],
 
