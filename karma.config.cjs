@@ -88,9 +88,9 @@ module.exports = function(config) {
         // enable / disable watching file and executing tests whenever any file changes
         autoWatch: false,
 
-        // browserDisconnectTimeout: 30000,
-        // browserNoActivityTimeout : 300000, // ms, by default 10000
-        // captureTimeout: 300000, // default is 60000
+        browserDisconnectTimeout: 30000,
+        browserNoActivityTimeout : 180000, // ms, by default 10000
+        captureTimeout: 180000, // default is 60000
 
         browserStack: {
             username: process.env.BROWSERSTACK_USERNAME,
