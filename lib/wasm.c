@@ -284,9 +284,9 @@ EMSCRIPTEN_KEEPALIVE void G2(uint64_t* X, uint64_t* Y, uint64_t* R, uint64_t* Z)
 #endif
 
 // Returns out = [l, z]
-EMSCRIPTEN_KEEPALIVE uint32_t* getLZ(uint32_t* out, uint32_t J1,uint32_t J2, uint32_t currentLane, uint32_t p, uint32_t pass, uint32_t slice, uint32_t segmentOffset, uint32_t SL, uint32_t segmentLength) {
+EMSCRIPTEN_KEEPALIVE uint32_t* getLZ(uint32_t* out, uint32_t* J1J2, uint32_t currentLane, uint32_t p, uint32_t pass, uint32_t slice, uint32_t segmentOffset, uint32_t SL, uint32_t segmentLength) {
   // For the first pass (r=0) and the first slice (sl=0), the block is taken from the current lane.
-  uint32_t l = (pass == 0 && slice == 0) ? currentLane : J2 % p;
+  uint32_t l = (pass == 0 && slice == 0) ? currentLane : J1J2[1] % p;
 
   // W includes the indices of all blocks in the last SL - 1 = 3 segments computed and finished (possibly from previous pass, if any).
   // Plus, if `l` is on the current lane, we can also reference the finished blocks in the current segment (up to 'offset')
@@ -296,7 +296,7 @@ EMSCRIPTEN_KEEPALIVE uint32_t* getLZ(uint32_t* out, uint32_t J1,uint32_t J2, uin
   uint32_t segmentCount = pass == 0 ? slice : SL-1;
   uint64_t W_area  = segmentCount * segmentLength + offset;
   // cast to uint64_t since we don't want the multiplication to be in uint32_t space
-  uint32_t x = ((uint64_t)J1 * J1) >> 32;
+  uint32_t x = ((uint64_t)J1J2[0] * J1J2[0]) >> 32;
   uint32_t y = (W_area * x) >> 32;
   uint32_t zz = W_area - 1 - y;
   uint32_t startPos = pass == 0 ? 0 : (slice + 1) * segmentLength; // next segment (except for first pass)
