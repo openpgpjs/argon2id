@@ -1,3 +1,12 @@
+import test from 'tape';
+
+// tape v4, used by karma-tape, does not automatically end the test on promise rejections.
+export const testWithRejection = (description, testFn) => {
+  test(description, (t) => {
+    Promise.resolve(testFn(t)).catch(t.end);
+  });
+}
+
 export function uint8ArrayToHex(bytes) {
   const res = new Array();
   for (let c = 0; c < bytes.length; c++) {

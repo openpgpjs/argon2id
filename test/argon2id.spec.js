@@ -1,5 +1,4 @@
-import test from 'tape';
-import { hexToUint8Array, uint8ArrayToHex } from './utils.js';
+import { testWithRejection as test, hexToUint8Array, uint8ArrayToHex } from './utils.js';
 
 const isNode = typeof globalThis.process === 'object' && typeof globalThis.process.versions === 'object';
 

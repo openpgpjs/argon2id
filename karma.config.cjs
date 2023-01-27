@@ -60,12 +60,13 @@ module.exports = function(config) {
                     // Strip away 'tape' imports (needed for Node tests) since they cannot be compiled for the browser.
                     // Karma already takes care of setting up the corresponding test functions.
                     {
-                        test: /\.spec\.js$/,
+                        test: /.js$/,
                         loader: 'string-replace-loader',
                         options: {
-                            search: /import\stest\sfrom\s'tape'/g,
+                            search: /import\s\w*\sfrom\s'tape'/g,
                             replace: ''
-                        }
+                        },
+                        exclude: [/node_modules/],
                     }
                 ],
             },
@@ -87,9 +88,9 @@ module.exports = function(config) {
         // enable / disable watching file and executing tests whenever any file changes
         autoWatch: false,
 
-        browserDisconnectTimeout: 30000,
-        browserNoActivityTimeout : 300000, // ms, by default 10000
-        captureTimeout: 300000, // default is 60000
+        // browserDisconnectTimeout: 30000,
+        // browserNoActivityTimeout : 300000, // ms, by default 10000
+        // captureTimeout: 300000, // default is 60000
 
         browserStack: {
             username: process.env.BROWSERSTACK_USERNAME,
