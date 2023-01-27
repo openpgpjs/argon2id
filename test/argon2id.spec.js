@@ -79,3 +79,14 @@ test('Test lowest recommended settings', async function (assert) {
   assert.equals(uint8ArrayToHex(tag), expected);
   assert.end()
 });
+
+test('Test growing memory', async function (assert) {
+  const expected = 'a829d4355e2d11c9514fe278ee75ed1f44a754aafdc6fbfdb01242ab3008cca6';
+  const tag = argon2id({
+    pwd: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+    salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
+    passes: 3, m_cost: Math.pow(2, 17), lanes: 4
+  });
+  assert.equals(uint8ArrayToHex(tag), expected);
+  assert.end()
+});
