@@ -1,6 +1,6 @@
 {
   "name": "argon2id",
-  "version": "0.0.0",
+  "version": "0.0.1-0",
   "description": "Argon2id implementation in pure Javascript",
   "browser": "index-browser.js",
   "main": "index-node.js",
