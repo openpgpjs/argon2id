@@ -89,8 +89,8 @@ module.exports = function(config) {
         autoWatch: false,
 
         browserDisconnectTimeout: 30000,
-        browserNoActivityTimeout : 180000, // ms, by default 10000
-        captureTimeout: 180000, // default is 60000
+        browserNoActivityTimeout : 300000, // ms, by default 10000
+        captureTimeout: 300000, // default is 60000
 
         browserStack: {
             username: process.env.BROWSERSTACK_USERNAME,
@@ -98,7 +98,7 @@ module.exports = function(config) {
             build: process.env.GITHUB_SHA,
             name: process.env.GITHUB_WORKFLOW,
             project: `argon2id/${process.env.GITHUB_EVENT_NAME || 'push'}`,
-            retryLimit: 1
+            retryLimit: 2
         },
 
         customLaunchers: { // don't forget to pass these manually in the CI workflow
