@@ -5,11 +5,16 @@
   "browser": "index-browser.js",
   "main": "index-node.js",
   "type": "module",
+  "files": [
+    "dist/",
+    "lib/"
+  ],
   "scripts": {
     "test": "tape-es test/blake2b.spec.js | tap-spec && tape-es test/argon2id.spec.js | tap-spec",
     "lint": "eslint index.js",
     "build": "rm -rf dist && mkdir dist && ./build-wasm.sh",
-    "test-browser": "karma start karma.config.cjs"
+    "test-browser": "karma start karma.config.cjs",
+    "preversion": "npm run build && npm test"
   },
   "repository": {
     "type": "git",
