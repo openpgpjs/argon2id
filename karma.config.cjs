@@ -50,12 +50,10 @@ module.exports = function(config) {
                 extensions: ['', '.js', '.json'],
             },
             module: {
-                noParse: /\.wasm$/,
                 rules: [
                     {
                         test: /\.wasm$/,
-                        loader: 'base64-loader',
-                        type: 'javascript/auto',
+                        loader: 'wasm-loader',
                     },
                     // Strip away 'tape' imports (needed for Node tests) since they cannot be compiled for the browser.
                     // Karma already takes care of setting up the corresponding test functions.

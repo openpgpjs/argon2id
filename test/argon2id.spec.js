@@ -1,4 +1,4 @@
-import { testWithRejection as test, hexToUint8Array, uint8ArrayToHex } from './utils.js';
+import { testWithRejection as test, hexToUint8Array, uint8ArrayToHex } from './helpers/utils.js';
 
 const isNode = typeof globalThis.process === 'object' && typeof globalThis.process.versions === 'object';
 
@@ -21,7 +21,8 @@ let argon2id;
 //   assert.end()
 // });
 test('load wasm', async function (assert) {
-  const { default: loadWasm } = isNode ? await import(/* webpackIgnore: true */ '../index-node.js') : await import('../index-browser.js');
+  // Node tests do not use a bundler, so we need an alternative entry-point
+  const { default: loadWasm } = isNode ? await import(/* webpackIgnore: true */ './helpers/node-loader.js') : await import('../index.js');
   argon2id = await loadWasm();
 
   assert.pass();

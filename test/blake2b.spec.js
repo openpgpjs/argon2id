@@ -1,6 +1,6 @@
 import blake2b from '../lib/blake2b.js';
 import vectors from './blake2b.vectors.json' assert { type: "json" };
-import { testWithRejection as test, hexToUint8Array } from './utils.js';
+import { testWithRejection as test, hexToUint8Array } from './helpers/utils.js';
 
 test('vectors', function (assert) {
   vectors.forEach(function (v) {
