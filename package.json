@@ -4,9 +4,11 @@
   "description": "Argon2id implementation in pure Javascript",
   "main": "index.js",
   "type": "module",
+  "types": "index.d.ts",
   "files": [
     "dist/",
-    "lib/"
+    "lib/",
+    "index.d.ts"
   ],
   "scripts": {
     "test": "tape-es test/blake2b.spec.js | tap-spec && tape-es test/argon2id.spec.js | tap-spec",
