@@ -1,12 +1,3 @@
-import test from 'tape';
-
-// tape v4, used by karma-tape, does not automatically end the test on promise rejections.
-export const testWithRejection = (description, testFn) => {
-  test(description, (t) => {
-    Promise.resolve(testFn(t)).catch(t.end);
-  });
-}
-
 export function uint8ArrayToHex(bytes) {
   const res = new Array();
   for (let c = 0; c < bytes.length; c++) {
@@ -14,7 +5,7 @@ export function uint8ArrayToHex(bytes) {
       res.push(hex.length < 2 ? '0' + hex : hex);
   }
   return res.join('');
-};
+}
 
 export function hexToUint8Array (string) {
   const buf = new Uint8Array(string.length / 2);
@@ -29,3 +20,5 @@ export function hexToUint8Array (string) {
   }
   return buf
 }
+
+export const isNode = typeof globalThis.process === 'object' && typeof globalThis.process.versions === 'object';

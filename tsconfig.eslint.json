@@ -1,0 +1,11 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmitOnError": false
+    },
+    "include": [
+        "./test/**/*",
+        "./lib/**/*",
+        "*.js"
+    ]
+}

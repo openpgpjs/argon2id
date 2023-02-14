@@ -1,0 +1,16 @@
+// used for tests only
+{
+    "compilerOptions": {
+        "target": "es6",
+        "module": "esnext",
+        "strict": true,
+        "sourceMap": true,
+        "allowJs": true,
+        "noEmitOnError": true,
+        "lib": ["dom", "esnext"]
+    },
+    "include": [
+        "./test/**/*",
+        "./index.d.ts"
+    ]
+}

@@ -16,20 +16,20 @@ module.exports = function(config) {
 
         // frameworks to use
         // available frameworks: https://www.npmjs.com/search?q=keywords:karma-adapter
-        frameworks: ['tape', 'webpack'],
+        frameworks: ['mocha', 'webpack'],
 
         plugins: [
-            'karma-tape',
+            'karma-mocha',
             'karma-chrome-launcher',
             'karma-firefox-launcher',
             'karma-webkit-launcher',
             'karma-webpack',
-            'karma-spec-reporter',
+            'karma-mocha-reporter',
             'karma-browserstack-launcher'
         ],
 
         // list of files / patterns to load in the browser
-        files: [{ pattern: 'test/argon2id.spec.js', watched: false }], // blake2b tests use Buffer
+        files: [{ pattern: 'test/argon2id.spec.ts', watched: false }], // blake2b tests use Buffer
 
         // list of files / patterns to exclude
         exclude: [],
@@ -37,7 +37,7 @@ module.exports = function(config) {
         // preprocess matching files before serving them to the browser
         // available preprocessors: https://www.npmjs.com/search?q=keywords:karma-preprocessor
         preprocessors: {
-            'test/argon2id.spec.js': 'webpack'
+            'test/argon2id.spec.ts': 'webpack'
         },
 
 
@@ -47,7 +47,7 @@ module.exports = function(config) {
                     stream: false,
                     buffer: false,
                 },
-                extensions: ['', '.js', '.json'],
+                extensions: ['', '.ts', '.js', '.json'],
             },
             module: {
                 rules: [
@@ -55,23 +55,16 @@ module.exports = function(config) {
                         test: /\.wasm$/,
                         loader: 'wasm-loader',
                     },
-                    // Strip away 'tape' imports (needed for Node tests) since they cannot be compiled for the browser.
-                    // Karma already takes care of setting up the corresponding test functions.
                     {
-                        test: /.js$/,
-                        loader: 'string-replace-loader',
-                        options: {
-                            search: /import\s\w*\sfrom\s'tape'/g,
-                            replace: ''
-                        },
-                        exclude: [/node_modules/],
+                        test: /\.ts$/,
+                        loader: 'ts-loader'
                     }
                 ],
             },
         },
 
         // available reporters: https://www.npmjs.com/search?q=keywords:karma-reporter
-        reporters: ['spec'],
+        reporters: ['mocha'],
 
         // web server port
         port: 9876,
@@ -117,6 +110,12 @@ module.exports = function(config) {
           },
 
         browsers: ['ChromeHeadless', 'FirefoxHeadless', 'WebkitHeadless'],
+
+        client: {
+            mocha: {
+                timeout: 20000
+            }
+        },
 
         // Continuous Integration mode
         // if true, Karma captures browsers, runs the tests and exits

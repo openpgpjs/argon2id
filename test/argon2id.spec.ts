@@ -1,8 +1,69 @@
-import { testWithRejection as test, hexToUint8Array, uint8ArrayToHex } from './helpers/utils.js';
+import { expect } from 'chai';
+import { isNode, hexToUint8Array, uint8ArrayToHex } from './helpers/utils.js';
+import type { computeHash } from '../index';
 
-const isNode = typeof globalThis.process === 'object' && typeof globalThis.process.versions === 'object';
+describe('argon2id tests', () => {
+  let argon2id: computeHash;
 
-let argon2id;
+  before('load wasm', async function () {
+    // Node tests do not use a bundler, so we need an alternative entry-point
+    // @ts-ignore
+    const { default: loadWasm } = isNode ? await import(/* webpackIgnore: true */ './helpers/node-loader.ts') : await import('../index.js');
+    argon2id = await loadWasm();
+
+  });
+
+  it('Test vector, 3 passes', function () {
+    const expected = '0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659';
+    const tagT3 = argon2id({
+      password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+      salt: hexToUint8Array('02020202020202020202020202020202'),
+      passes: 3, memorySize:32, parallelism: 4,
+      secret: hexToUint8Array('0303030303030303'),
+      ad: hexToUint8Array('040404040404040404040404'),
+      tagLength: 32
+    });
+    expect(uint8ArrayToHex(tagT3)).to.equal(expected);
+  });
+
+  it('Test vector, segment length above 2', function () {
+    // The first two columns of the first pass & slice are treated differently, and do not rely on any J1, J2.
+    // But the corresponding pseudo-random values should still be generated, and discarded.
+    // This test checks that the following columns use the expected pseudo-random J1 and J2.
+    const expected = '47c71919daf18f9d1756391f1f9f4a7df3aa9608128965f1e84c0d6fcc34db87';
+    const tag = argon2id({
+      password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+      salt: hexToUint8Array('02020202020202020202020202020202'),
+      passes: 3, memorySize:32, parallelism: 2,
+      secret: hexToUint8Array('0303030303030303'),
+      ad: hexToUint8Array('040404040404040404040404'),
+      tagLength: 32
+    });
+    expect(uint8ArrayToHex(tag)).to.equal(expected);
+  });
+
+  it('Test lowest recommended settings', function () {
+    const expected = '6904f1422410f8360c6538300210a2868f5e80cd88606ec7d6e7e93b49983cea';
+    const tag = argon2id({
+      password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+      salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
+      passes: 3, memorySize: Math.pow(2, 16), parallelism: 4, tagLength: 32
+    });
+    expect(uint8ArrayToHex(tag)).to.equal(expected);
+  });
+
+  it('Test growing memory', function () {
+    const expected = 'a829d4355e2d11c9514fe278ee75ed1f44a754aafdc6fbfdb01242ab3008cca6';
+    const tag = argon2id({
+      password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
+      salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
+      passes: 3, memorySize: Math.pow(2, 17), parallelism: 4, tagLength: 32
+    });
+
+    expect(uint8ArrayToHex(tag)).to.equal(expected);
+  });
+})
+
 
 // TODO G tests: would need to init wasm memory separately. Consider removing the tests altogether, since they only matter for debugging
 // test('compression function and permutation', function (assert) {
@@ -19,78 +80,4 @@ let argon2id;
 //   assert.equals(uint8ArrayToHex(G(X2, Y2)), expectedR2);
 
 //   assert.end()
-// });
-test('load wasm', async function (assert) {
-  // Node tests do not use a bundler, so we need an alternative entry-point
-  const { default: loadWasm } = isNode ? await import(/* webpackIgnore: true */ './helpers/node-loader.js') : await import('../index.js');
-  argon2id = await loadWasm();
-
-  assert.pass();
-  assert.end();
-})
-test('Test vector, 1 pass', async function (assert) {
-  const expected = '717fd03e48737c93e05cebb669c886322d6a23a9fd23ee2615100dff74e69213';
-  const tagT1 = argon2id({
-    password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
-    salt: hexToUint8Array('02020202020202020202020202020202'),
-    passes: 1, memorySize:32, parallelism: 4,
-    secret: hexToUint8Array('0303030303030303'),
-    ad: hexToUint8Array('040404040404040404040404'),
-    tagLength: 32
-  });
-  assert.equals(uint8ArrayToHex(tagT1), expected);
-  assert.end()
-});
-
-test('Test vector, 3 passes', async function (assert) {
-  const expected = '0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659';
-  const tagT3 = argon2id({
-    password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
-    salt: hexToUint8Array('02020202020202020202020202020202'),
-    passes: 3, memorySize:32, parallelism: 4,
-    secret: hexToUint8Array('0303030303030303'),
-    ad: hexToUint8Array('040404040404040404040404'),
-    tagLength: 32
-  });
-  assert.equals(uint8ArrayToHex(tagT3), expected);
-  assert.end()
-});
-
-test('Test vector, segment length above 2', async function (assert) {
-  // The first two columns of the first pass & slice are treated differently, and do not rely on any J1, J2.
-  // But the corresponding pseudo-random values should still be generated, and discarded.
-  // This test checks that the following columns use the expected pseudo-random J1 and J2.
-  const expected = '47c71919daf18f9d1756391f1f9f4a7df3aa9608128965f1e84c0d6fcc34db87';
-  const tag = argon2id({
-    password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
-    salt: hexToUint8Array('02020202020202020202020202020202'),
-    passes: 3, memorySize:32, parallelism: 2,
-    secret: hexToUint8Array('0303030303030303'),
-    ad: hexToUint8Array('040404040404040404040404'),
-    tagLength: 32
-  });
-  assert.equals(uint8ArrayToHex(tag), expected);
-  assert.end()
-});
-
-test('Test lowest recommended settings', async function (assert) {
-  const expected = '6904f1422410f8360c6538300210a2868f5e80cd88606ec7d6e7e93b49983cea';
-  const tag = argon2id({
-    password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
-    salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
-    passes: 3, memorySize: Math.pow(2, 16), parallelism: 4, tagLength: 32
-  });
-  assert.equals(uint8ArrayToHex(tag), expected);
-  assert.end()
-});
-
-test('Test growing memory', async function (assert) {
-  const expected = 'a829d4355e2d11c9514fe278ee75ed1f44a754aafdc6fbfdb01242ab3008cca6';
-  const tag = argon2id({
-    password: hexToUint8Array('0101010101010101010101010101010101010101010101010101010101010101'),
-    salt: hexToUint8Array('0202020202020202020202020202020202020202020202020202020202020202'),
-    passes: 3, memorySize: Math.pow(2, 17), parallelism: 4, tagLength: 32
-  });
-  assert.equals(uint8ArrayToHex(tag), expected);
-  assert.end()
-});
+// });'

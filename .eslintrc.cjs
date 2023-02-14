@@ -3,20 +3,26 @@ module.exports = {
       "eslint:recommended"
   ],
 
+  "parser": "@typescript-eslint/parser",
   "parserOptions": {
       "ecmaVersion": 9,
-      "sourceType": "module"
+      "sourceType": "module",
+      "project": "tsconfig.eslint.json"
   },
 
   "globals": {
       "btoa": "readonly",
-      "atob": "readonly"
+      "atob": "readonly",
+      "globalThis": "readonly"
   },
   "env": {
       "es6": true,
-      "browser": true
+      "browser": true,
+      "node": true,
+      "mocha": true
   },
   "plugins": [
+      "@typescript-eslint",
       "import"
   ],
   "rules": {
