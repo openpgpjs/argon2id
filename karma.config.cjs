@@ -1,5 +1,4 @@
 const { chromium, firefox, webkit } = require('playwright');
-/* global process */
 process.env.CHROME_BIN = chromium.executablePath();
 process.env.FIREFOX_BIN = firefox.executablePath();
 process.env.WEBKIT_HEADLESS_BIN = webkit.executablePath();

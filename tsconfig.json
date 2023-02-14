@@ -8,9 +8,5 @@
         "allowJs": true,
         "noEmitOnError": true,
         "lib": ["dom", "esnext"]
-    },
-    "include": [
-        "./test/**/*",
-        "./index.d.ts"
-    ]
+    }
 }

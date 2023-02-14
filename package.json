@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "test": "mocha --loader=ts-node/esm test/blake2b.spec.js test/argon2id.spec.ts",
-    "lint": "eslint index.js",
+    "lint": "eslint index.js lib test",
     "build": "rm -rf dist && mkdir dist && ./build-wasm.sh",
     "test-browser": "karma start karma.config.cjs",
     "preversion": "npm run build && npm test"
